@@ -67,7 +67,7 @@ public class LdapAuthenticator
         this.userBindSearchPatterns = ldapAuthenticatorConfig.getUserBindSearchPatterns();
         this.groupAuthorizationSearchPattern = Optional.ofNullable(ldapAuthenticatorConfig.getGroupAuthorizationSearchPattern());
         this.userBaseDistinguishedName = Optional.ofNullable(ldapAuthenticatorConfig.getUserBaseDistinguishedName());
-        this.bindDistinguishedName = Optional.ofNullable(ldapAuthenticatorConfig.getBindDistingushedName());
+        this.bindDistinguishedName = Optional.of(ldapAuthenticatorConfig.getBindDistingushedName());
         this.bindPassword = Optional.ofNullable(ldapAuthenticatorConfig.getBindPassword());
 
         checkArgument(
@@ -155,7 +155,9 @@ public class LdapAuthenticator
             throw new AccessDeniedException("Username contains a special LDAP character");
         }
         try {
-            String userDistinguishedName = lookupUserDistinguishedName(user);
+//            String userDistinguishedName = lookupUserDistinguishedName(user);
+            //使用简单的方式直接验证账号密码
+            String userDistinguishedName = replaceUser(bindDistinguishedName.get(), user);
             client.validatePassword(userDistinguishedName, credential.getPassword());
             log.debug("Authentication successful for user [%s]", user);
         }
