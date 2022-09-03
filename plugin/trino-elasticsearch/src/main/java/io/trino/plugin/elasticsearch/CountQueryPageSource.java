@@ -16,6 +16,7 @@ package io.trino.plugin.elasticsearch;
 import io.trino.plugin.elasticsearch.client.ElasticsearchClient;
 import io.trino.spi.Page;
 import io.trino.spi.connector.ConnectorPageSource;
+import io.trino.spi.security.ConnectorIdentity;
 
 import static io.trino.plugin.elasticsearch.ElasticsearchQueryBuilder.buildSearchQuery;
 import static java.lang.Math.toIntExact;
@@ -32,7 +33,7 @@ class CountQueryPageSource
     private final long readTimeNanos;
     private long remaining;
 
-    public CountQueryPageSource(ElasticsearchClient client, ElasticsearchTableHandle table, ElasticsearchSplit split)
+    public CountQueryPageSource(ElasticsearchClient client, ElasticsearchTableHandle table, ElasticsearchSplit split, ConnectorIdentity identity)
     {
         requireNonNull(client, "client is null");
         requireNonNull(table, "table is null");
@@ -42,7 +43,7 @@ class CountQueryPageSource
         long count = client.count(
                 split.getIndex(),
                 split.getShard(),
-                buildSearchQuery(table.getConstraint().transformKeys(ElasticsearchColumnHandle.class::cast), table.getQuery(), table.getRegexes()));
+                buildSearchQuery(table.getConstraint().transformKeys(ElasticsearchColumnHandle.class::cast), table.getQuery(), table.getRegexes()), identity);
         readTimeNanos = System.nanoTime() - start;
 
         if (table.getLimit().isPresent()) {

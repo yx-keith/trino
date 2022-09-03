@@ -23,6 +23,7 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.PageBuilderStatus;
 import io.trino.spi.connector.ConnectorPageSource;
+import io.trino.spi.security.ConnectorIdentity;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeManager;
@@ -65,7 +66,8 @@ public class ScanQueryPageSource
             TypeManager typeManager,
             ElasticsearchTableHandle table,
             ElasticsearchSplit split,
-            List<ElasticsearchColumnHandle> columns)
+            List<ElasticsearchColumnHandle> columns,
+            ConnectorIdentity identity)
     {
         requireNonNull(client, "client is null");
         requireNonNull(typeManager, "typeManager is null");
@@ -115,9 +117,10 @@ public class ScanQueryPageSource
                 needAllFields ? Optional.empty() : Optional.of(requiredFields),
                 documentFields,
                 sort,
-                table.getLimit());
+                table.getLimit(),
+                identity);
         readTimeNanos += System.nanoTime() - start;
-        this.iterator = new SearchHitIterator(client, () -> searchResponse, table.getLimit());
+        this.iterator = new SearchHitIterator(client, () -> searchResponse, table.getLimit(), identity);
     }
 
     @Override
@@ -255,13 +258,15 @@ public class ScanQueryPageSource
 
         private long readTimeNanos;
         private long totalRecordCount;
+        private final ConnectorIdentity identity;
 
-        public SearchHitIterator(ElasticsearchClient client, Supplier<SearchResponse> first, OptionalLong limit)
+        public SearchHitIterator(ElasticsearchClient client, Supplier<SearchResponse> first, OptionalLong limit, ConnectorIdentity identity)
         {
             this.client = client;
             this.first = first;
             this.limit = limit;
             this.totalRecordCount = 0;
+            this.identity = identity;
         }
 
         public long getReadTimeNanos()
@@ -285,7 +290,7 @@ public class ScanQueryPageSource
             }
             else if (currentPosition == searchHits.getHits().length) {
                 long start = System.nanoTime();
-                SearchResponse response = client.nextPage(scrollId);
+                SearchResponse response = client.nextPage(scrollId, identity);
                 readTimeNanos += System.nanoTime() - start;
                 reset(response);
             }
@@ -312,7 +317,7 @@ public class ScanQueryPageSource
         {
             if (scrollId != null) {
                 try {
-                    client.clearScroll(scrollId);
+                    client.clearScroll(scrollId, identity);
                 }
                 catch (Exception e) {
                     // ignore

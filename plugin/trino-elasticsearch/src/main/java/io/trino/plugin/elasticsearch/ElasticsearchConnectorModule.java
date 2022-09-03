@@ -16,6 +16,7 @@ package io.trino.plugin.elasticsearch;
 import com.google.inject.Binder;
 import com.google.inject.Scopes;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
+import io.trino.plugin.elasticsearch.client.CachingElasticsearchClient;
 import io.trino.plugin.elasticsearch.client.ElasticsearchClient;
 
 import static com.google.inject.multibindings.OptionalBinder.newOptionalBinder;
@@ -45,6 +46,7 @@ public class ElasticsearchConnectorModule
 
         newOptionalBinder(binder, AwsSecurityConfig.class);
         newOptionalBinder(binder, PasswordConfig.class);
+        binder.bind(CachingElasticsearchClient.class).in(Scopes.SINGLETON);
 
         install(conditionalModule(
                 ElasticsearchConfig.class,

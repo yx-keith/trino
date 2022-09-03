@@ -20,6 +20,7 @@ import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.connector.ConnectorPageSource;
+import io.trino.spi.security.ConnectorIdentity;
 
 import java.io.IOException;
 
@@ -33,13 +34,13 @@ public class PassthroughQueryPageSource
     private final String result;
     private boolean done;
 
-    public PassthroughQueryPageSource(ElasticsearchClient client, ElasticsearchTableHandle table)
+    public PassthroughQueryPageSource(ElasticsearchClient client, ElasticsearchTableHandle table, ConnectorIdentity identity)
     {
         requireNonNull(client, "client is null");
         requireNonNull(table, "table is null");
 
         long start = System.nanoTime();
-        result = client.executeQuery(table.getIndex(), table.getQuery().get());
+        result = client.executeQuery(table.getIndex(), table.getQuery().get(), identity);
         readTimeNanos = System.nanoTime() - start;
     }
 

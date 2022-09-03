@@ -61,11 +61,11 @@ public class ElasticsearchPageSourceProvider
         ElasticsearchSplit elasticsearchSplit = (ElasticsearchSplit) split;
 
         if (elasticsearchTable.getType().equals(QUERY)) {
-            return new PassthroughQueryPageSource(client, elasticsearchTable);
+            return new PassthroughQueryPageSource(client, elasticsearchTable, session.getIdentity());
         }
 
         if (columns.isEmpty()) {
-            return new CountQueryPageSource(client, elasticsearchTable, elasticsearchSplit);
+            return new CountQueryPageSource(client, elasticsearchTable, elasticsearchSplit, session.getIdentity());
         }
 
         return new ScanQueryPageSource(
@@ -75,6 +75,7 @@ public class ElasticsearchPageSourceProvider
                 elasticsearchSplit,
                 columns.stream()
                         .map(ElasticsearchColumnHandle.class::cast)
-                        .collect(toImmutableList()));
+                        .collect(toImmutableList()),
+                session.getIdentity());
     }
 }

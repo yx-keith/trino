@@ -61,6 +61,7 @@ import io.trino.spi.expression.Constant;
 import io.trino.spi.expression.Variable;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.security.ConnectorIdentity;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.StandardTypes;
@@ -191,7 +192,7 @@ public class ElasticsearchMetadata
                 }
             }
 
-            if (client.indexExists(table) && !client.getIndexMetadata(table).getSchema().getFields().isEmpty()) {
+            if (client.indexExists(table, session.getIdentity()) && !client.getIndexMetadata(table, session.getIdentity()).getSchema().getFields().isEmpty()) {
                 return new ElasticsearchTableHandle(type, schemaName, table, query);
             }
         }
@@ -209,24 +210,24 @@ public class ElasticsearchMetadata
                     new SchemaTableName(handle.getSchema(), handle.getIndex()),
                     ImmutableList.of(PASSTHROUGH_QUERY_RESULT_COLUMN_METADATA));
         }
-        return getTableMetadata(handle.getSchema(), handle.getIndex());
+        return getTableMetadata(handle.getSchema(), handle.getIndex(), session.getIdentity());
     }
 
-    private ConnectorTableMetadata getTableMetadata(String schemaName, String tableName)
+    private ConnectorTableMetadata getTableMetadata(String schemaName, String tableName, ConnectorIdentity identity)
     {
-        InternalTableMetadata internalTableMetadata = makeInternalTableMetadata(schemaName, tableName);
+        InternalTableMetadata internalTableMetadata = makeInternalTableMetadata(schemaName, tableName, identity);
         return new ConnectorTableMetadata(new SchemaTableName(schemaName, tableName), internalTableMetadata.getColumnMetadata());
     }
 
-    private InternalTableMetadata makeInternalTableMetadata(ConnectorTableHandle table)
+    private InternalTableMetadata makeInternalTableMetadata(ConnectorTableHandle table, ConnectorIdentity identity)
     {
         ElasticsearchTableHandle handle = (ElasticsearchTableHandle) table;
-        return makeInternalTableMetadata(handle.getSchema(), handle.getIndex());
+        return makeInternalTableMetadata(handle.getSchema(), handle.getIndex(), identity);
     }
 
-    private InternalTableMetadata makeInternalTableMetadata(String schema, String tableName)
+    private InternalTableMetadata makeInternalTableMetadata(String schema, String tableName, ConnectorIdentity identity)
     {
-        IndexMetadata metadata = client.getIndexMetadata(tableName);
+        IndexMetadata metadata = client.getIndexMetadata(tableName, identity);
         List<IndexMetadata.Field> fields = getColumnFields(metadata);
         return new InternalTableMetadata(new SchemaTableName(schema, tableName), makeColumnMetadata(fields), makeColumnHandles(fields));
     }
@@ -406,13 +407,13 @@ public class ElasticsearchMetadata
         }
 
         ImmutableList.Builder<SchemaTableName> result = ImmutableList.builder();
-        Set<String> indexes = ImmutableSet.copyOf(client.getIndexes());
+        Set<String> indexes = ImmutableSet.copyOf(client.getIndexes(session.getIdentity()));
 
         indexes.stream()
                 .map(index -> new SchemaTableName(this.schemaName, index))
                 .forEach(result::add);
 
-        client.getAliases().entrySet().stream()
+        client.getAliases(session.getIdentity()).entrySet().stream()
                 .filter(entry -> indexes.contains(entry.getKey()))
                 .flatMap(entry -> entry.getValue().stream()
                         .map(alias -> new SchemaTableName(this.schemaName, alias)))
@@ -431,7 +432,7 @@ public class ElasticsearchMetadata
             return PASSTHROUGH_QUERY_COLUMNS;
         }
 
-        InternalTableMetadata tableMetadata = makeInternalTableMetadata(tableHandle);
+        InternalTableMetadata tableMetadata = makeInternalTableMetadata(tableHandle, session.getIdentity());
         return tableMetadata.getColumnHandles();
     }
 
@@ -465,12 +466,12 @@ public class ElasticsearchMetadata
         }
 
         if (prefix.getSchema().isPresent() && prefix.getTable().isPresent()) {
-            ConnectorTableMetadata metadata = getTableMetadata(prefix.getSchema().get(), prefix.getTable().get());
+            ConnectorTableMetadata metadata = getTableMetadata(prefix.getSchema().get(), prefix.getTable().get(), session.getIdentity());
             return ImmutableMap.of(metadata.getTable(), metadata.getColumns());
         }
 
         return listTables(session, prefix.getSchema()).stream()
-                .map(name -> getTableMetadata(name.getSchemaName(), name.getTableName()))
+                .map(name -> getTableMetadata(name.getSchemaName(), name.getTableName(), session.getIdentity()))
                 .collect(toImmutableMap(ConnectorTableMetadata::getTable, ConnectorTableMetadata::getColumns));
     }
 
@@ -561,7 +562,7 @@ public class ElasticsearchMetadata
                     }
 
                     if (!newRegexes.containsKey(columnName) && pattern instanceof Slice) {
-                        IndexMetadata metadata = client.getIndexMetadata(handle.getIndex());
+                        IndexMetadata metadata = client.getIndexMetadata(handle.getIndex(), session.getIdentity());
                         if (metadata.getSchema()
                                     .getFields().stream()
                                     .anyMatch(field -> columnName.equals(field.getName()) && field.getType() instanceof PrimitiveType && "keyword".equals(((PrimitiveType) field.getType()).getName()))) {
