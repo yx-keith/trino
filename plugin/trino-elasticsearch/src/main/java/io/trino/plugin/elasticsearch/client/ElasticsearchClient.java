@@ -36,6 +36,8 @@ import io.trino.plugin.elasticsearch.AwsSecurityConfig;
 import io.trino.plugin.elasticsearch.ElasticsearchConfig;
 import io.trino.plugin.elasticsearch.PasswordConfig;
 import io.trino.spi.TrinoException;
+import io.trino.spi.security.ConnectorIdentity;
+import io.trino.spi.security.GlobalSecurityConfig;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
@@ -117,7 +119,7 @@ public class ElasticsearchClient
     private static final Pattern ADDRESS_PATTERN = Pattern.compile("((?<cname>[^/]+)/)?(?<ip>.+):(?<port>\\d+)");
     private static final Set<String> NODE_ROLES = ImmutableSet.of("data", "data_content", "data_hot", "data_warm", "data_cold", "data_frozen");
 
-    private final BackpressureRestHighLevelClient client;
+    private BackpressureRestHighLevelClient client;
     private final int scrollSize;
     private final Duration scrollTimeout;
 
@@ -132,12 +134,17 @@ public class ElasticsearchClient
     private final TimeStat nextPageStats = new TimeStat(MILLISECONDS);
     private final TimeStat countStats = new TimeStat(MILLISECONDS);
     private final TimeStat backpressureStats = new TimeStat(MILLISECONDS);
+    private final boolean esImpersonationEnabled;
+    private final CachingElasticsearchClient cachingElasticsearchClient;
+    private static final String SEPARATOR = ":";
+    private static final String impersonatingPasswordKey = GlobalSecurityConfig.connectorImpersonatingPasswordKey;
 
     @Inject
     public ElasticsearchClient(
             ElasticsearchConfig config,
             Optional<AwsSecurityConfig> awsSecurityConfig,
-            Optional<PasswordConfig> passwordConfig)
+            Optional<PasswordConfig> passwordConfig,
+            CachingElasticsearchClient cachingElasticsearchClient)
     {
         requireNonNull(config, "config is null");
 
@@ -148,6 +155,8 @@ public class ElasticsearchClient
         this.scrollTimeout = config.getScrollTimeout();
         this.refreshInterval = config.getNodeRefreshInterval();
         this.tlsEnabled = config.isTlsEnabled();
+        this.esImpersonationEnabled = config.isEsImpersonationEnabled();
+        this.cachingElasticsearchClient = cachingElasticsearchClient;
     }
 
     @PostConstruct
@@ -167,6 +176,15 @@ public class ElasticsearchClient
     {
         executor.shutdownNow();
         client.close();
+        if (esImpersonationEnabled) {
+            cachingElasticsearchClient.getAllInstances().forEach(client -> {
+                try {
+                    client.close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        }
     }
 
     private void refreshNodes()
@@ -313,12 +331,12 @@ public class ElasticsearchClient
         return nodes.get();
     }
 
-    public List<Shard> getSearchShards(String index)
+    public List<Shard> getSearchShards(String index, ConnectorIdentity identity)
     {
         Map<String, ElasticsearchNode> nodeById = getNodes().stream()
                 .collect(toImmutableMap(ElasticsearchNode::getId, Function.identity()));
 
-        SearchShardsResponse shardsResponse = doRequest(format("/%s/_search_shards", index), SEARCH_SHARDS_RESPONSE_CODEC::fromJson);
+        SearchShardsResponse shardsResponse = doRequest(format("/%s/_search_shards", index), SEARCH_SHARDS_RESPONSE_CODEC::fromJson, identity);
 
         ImmutableList.Builder<Shard> shards = ImmutableList.builder();
         List<ElasticsearchNode> nodes = ImmutableList.copyOf(nodeById.values());
@@ -358,9 +376,14 @@ public class ElasticsearchClient
         return left.isPrimary() ? 1 : -1;
     }
 
-    public boolean indexExists(String index)
+    public boolean indexExists(String index, ConnectorIdentity identity)
     {
         String path = format("/%s/_mappings", index);
+
+        if(esImpersonationEnabled) {
+            String key = identity.getUser() + SEPARATOR + identity.getExtraCredentials().get(impersonatingPasswordKey);
+            client = cachingElasticsearchClient.getInstance(key);
+        }
 
         try {
             Response response = client.getLowLevelClient()
@@ -379,7 +402,7 @@ public class ElasticsearchClient
         }
     }
 
-    public List<String> getIndexes()
+    public List<String> getIndexes(ConnectorIdentity identity)
     {
         return doRequest("/_cat/indices?h=index,docs.count,docs.deleted&format=json&s=index:asc", body -> {
             try {
@@ -392,7 +415,7 @@ public class ElasticsearchClient
                     int deletedDocsCount = root.get(i).get("docs.deleted").asInt();
                     if (docsCount == 0 && deletedDocsCount == 0) {
                         // without documents, the index won't have any dynamic mappings, but maybe there are some explicit ones
-                        if (getIndexMetadata(index).getSchema().getFields().isEmpty()) {
+                        if (getIndexMetadata(index, identity).getSchema().getFields().isEmpty()) {
                             continue;
                         }
                     }
@@ -403,10 +426,10 @@ public class ElasticsearchClient
             catch (IOException e) {
                 throw new TrinoException(ELASTICSEARCH_INVALID_RESPONSE, e);
             }
-        });
+        }, identity);
     }
 
-    public Map<String, List<String>> getAliases()
+    public Map<String, List<String>> getAliases(ConnectorIdentity identity)
     {
         return doRequest("/_aliases", body -> {
             try {
@@ -427,10 +450,10 @@ public class ElasticsearchClient
             catch (IOException e) {
                 throw new TrinoException(ELASTICSEARCH_INVALID_RESPONSE, e);
             }
-        });
+        }, identity);
     }
 
-    public IndexMetadata getIndexMetadata(String index)
+    public IndexMetadata getIndexMetadata(String index, ConnectorIdentity identity)
     {
         String path = format("/%s/_mappings", index);
 
@@ -468,7 +491,7 @@ public class ElasticsearchClient
             catch (IOException e) {
                 throw new TrinoException(ELASTICSEARCH_INVALID_RESPONSE, e);
             }
-        });
+        }, identity);
     }
 
     private IndexMetadata.ObjectType parseType(JsonNode properties, JsonNode metaProperties)
@@ -536,11 +559,16 @@ public class ElasticsearchClient
         return jsonNode.get(name);
     }
 
-    public String executeQuery(String index, String query)
+    public String executeQuery(String index, String query, ConnectorIdentity identity)
     {
         String path = format("/%s/_search", index);
 
         Response response;
+        if(esImpersonationEnabled) {
+            String key = identity.getUser() + SEPARATOR + identity.getExtraCredentials().get(impersonatingPasswordKey);
+            client = cachingElasticsearchClient.getInstance(key);
+        }
+
         try {
             response = client.getLowLevelClient()
                     .performRequest(
@@ -566,7 +594,7 @@ public class ElasticsearchClient
         return body;
     }
 
-    public SearchResponse beginSearch(String index, int shard, QueryBuilder query, Optional<List<String>> fields, List<String> documentFields, Optional<String> sort, OptionalLong limit)
+    public SearchResponse beginSearch(String index, int shard, QueryBuilder query, Optional<List<String>> fields, List<String> documentFields, Optional<String> sort, OptionalLong limit, ConnectorIdentity identity)
     {
         SearchSourceBuilder sourceBuilder = SearchSourceBuilder.searchSource()
                 .query(query);
@@ -600,6 +628,12 @@ public class ElasticsearchClient
                 .source(sourceBuilder);
 
         long start = System.nanoTime();
+
+        if(esImpersonationEnabled) {
+            String key = identity.getUser() + SEPARATOR + identity.getExtraCredentials().get(impersonatingPasswordKey);
+            client = cachingElasticsearchClient.getInstance(key);
+        }
+
         try {
             return client.search(request);
         }
@@ -622,7 +656,7 @@ public class ElasticsearchClient
         }
     }
 
-    public SearchResponse nextPage(String scrollId)
+    public SearchResponse nextPage(String scrollId, ConnectorIdentity identity)
     {
         LOG.debug("Next page: %s", scrollId);
 
@@ -630,6 +664,12 @@ public class ElasticsearchClient
                 .scroll(new TimeValue(scrollTimeout.toMillis()));
 
         long start = System.nanoTime();
+
+        if(esImpersonationEnabled) {
+            String key = identity.getUser() + SEPARATOR + identity.getExtraCredentials().get(impersonatingPasswordKey);
+            client = cachingElasticsearchClient.getInstance(key);
+        }
+
         try {
             return client.searchScroll(request);
         }
@@ -641,7 +681,7 @@ public class ElasticsearchClient
         }
     }
 
-    public long count(String index, int shard, QueryBuilder query)
+    public long count(String index, int shard, QueryBuilder query, ConnectorIdentity identity)
     {
         SearchSourceBuilder sourceBuilder = SearchSourceBuilder.searchSource()
                 .query(query);
@@ -651,6 +691,10 @@ public class ElasticsearchClient
         long start = System.nanoTime();
         try {
             Response response;
+            if(esImpersonationEnabled) {
+                String key = identity.getUser() + SEPARATOR + identity.getExtraCredentials().get(impersonatingPasswordKey);
+                client = cachingElasticsearchClient.getInstance(key);
+            }
             try {
                 response = client.getLowLevelClient()
                         .performRequest(
@@ -680,10 +724,16 @@ public class ElasticsearchClient
         }
     }
 
-    public void clearScroll(String scrollId)
+    public void clearScroll(String scrollId, ConnectorIdentity identity)
     {
         ClearScrollRequest request = new ClearScrollRequest();
         request.addScrollId(scrollId);
+
+        if(esImpersonationEnabled) {
+            String key = identity.getUser() + SEPARATOR + identity.getExtraCredentials().get(impersonatingPasswordKey);
+            client = cachingElasticsearchClient.getInstance(key);
+        }
+
         try {
             client.clearScroll(request);
         }
@@ -725,6 +775,36 @@ public class ElasticsearchClient
         checkArgument(path.startsWith("/"), "path must be an absolute path");
 
         Response response;
+        try {
+            response = client.getLowLevelClient()
+                    .performRequest("GET", path);
+        }
+        catch (IOException e) {
+            throw new TrinoException(ELASTICSEARCH_CONNECTION_ERROR, e);
+        }
+
+        String body;
+        try {
+            body = EntityUtils.toString(response.getEntity());
+        }
+        catch (IOException e) {
+            throw new TrinoException(ELASTICSEARCH_INVALID_RESPONSE, e);
+        }
+
+        return handler.process(body);
+    }
+
+    private <T> T doRequest(String path, ResponseHandler<T> handler, ConnectorIdentity identity)
+    {
+        checkArgument(path.startsWith("/"), "path must be an absolute path");
+
+        Response response;
+
+        if(esImpersonationEnabled) {
+            String key = identity.getUser() + SEPARATOR + identity.getExtraCredentials().get(impersonatingPasswordKey);
+            client = cachingElasticsearchClient.getInstance(key);
+        }
+
         try {
             response = client.getLowLevelClient()
                     .performRequest("GET", path);

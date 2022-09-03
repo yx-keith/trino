@@ -75,6 +75,8 @@ public class ElasticsearchConfig
     private String truststorePassword;
     private boolean ignorePublishAddress;
     private boolean verifyHostnames = true;
+    private boolean esClientImpersonationEnabled;
+    private long esClientCacheExpireSeconds = 3600;
 
     private Security security;
 
@@ -355,6 +357,32 @@ public class ElasticsearchConfig
     public ElasticsearchConfig setSecurity(Security security)
     {
         this.security = security;
+        return this;
+    }
+
+    public boolean isEsImpersonationEnabled()
+    {
+        return esClientImpersonationEnabled;
+    }
+
+    @Config("es.client-impersonation.enabled")
+    @ConfigDescription("Should Trino user be impersonated when communicating with elasticsearch")
+    public ElasticsearchConfig setEsImpersonationEnabled(boolean esClientImpersonationEnabled)
+    {
+        this.esClientImpersonationEnabled = esClientImpersonationEnabled;
+        return this;
+    }
+
+    public long getEsClientCacheExpireSeconds()
+    {
+        return esClientCacheExpireSeconds;
+    }
+
+    @Config("es.client-cache-expire-seconds")
+    @ConfigDescription("Should Trino user be impersonated when communicating with elasticsearch")
+    public ElasticsearchConfig setEsClientCacheExpireSeconds(long esClientCacheExpireSeconds)
+    {
+        this.esClientCacheExpireSeconds = esClientCacheExpireSeconds;
         return this;
     }
 }
