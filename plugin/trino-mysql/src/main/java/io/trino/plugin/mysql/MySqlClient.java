@@ -23,21 +23,7 @@ import io.airlift.log.Logger;
 import io.trino.plugin.base.aggregation.AggregateFunctionRewriter;
 import io.trino.plugin.base.aggregation.AggregateFunctionRule;
 import io.trino.plugin.base.expression.ConnectorExpressionRewriter;
-import io.trino.plugin.jdbc.BaseJdbcClient;
-import io.trino.plugin.jdbc.BaseJdbcConfig;
-import io.trino.plugin.jdbc.ColumnMapping;
-import io.trino.plugin.jdbc.ConnectionFactory;
-import io.trino.plugin.jdbc.JdbcColumnHandle;
-import io.trino.plugin.jdbc.JdbcExpression;
-import io.trino.plugin.jdbc.JdbcJoinCondition;
-import io.trino.plugin.jdbc.JdbcSortItem;
-import io.trino.plugin.jdbc.JdbcStatisticsConfig;
-import io.trino.plugin.jdbc.JdbcTableHandle;
-import io.trino.plugin.jdbc.JdbcTypeHandle;
-import io.trino.plugin.jdbc.PreparedQuery;
-import io.trino.plugin.jdbc.QueryBuilder;
-import io.trino.plugin.jdbc.RemoteTableName;
-import io.trino.plugin.jdbc.WriteMapping;
+import io.trino.plugin.jdbc.*;
 import io.trino.plugin.jdbc.aggregation.ImplementAvgDecimal;
 import io.trino.plugin.jdbc.aggregation.ImplementAvgFloatingPoint;
 import io.trino.plugin.jdbc.aggregation.ImplementCount;
@@ -50,6 +36,7 @@ import io.trino.plugin.jdbc.aggregation.ImplementVariancePop;
 import io.trino.plugin.jdbc.aggregation.ImplementVarianceSamp;
 import io.trino.plugin.jdbc.expression.JdbcConnectorExpressionRewriterBuilder;
 import io.trino.plugin.jdbc.mapping.IdentifierMapping;
+import io.trino.plugin.mysql.security.AuthorizeManager;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.AggregateFunction;
 import io.trino.spi.connector.ColumnHandle;
@@ -197,6 +184,8 @@ public class MySqlClient
     private final boolean statisticsEnabled;
     private final ConnectorExpressionRewriter<String> connectorExpressionRewriter;
     private final AggregateFunctionRewriter<JdbcExpression, String> aggregateFunctionRewriter;
+    private final boolean customAuthorizeEnabled;
+    private final String customAuthorizeUrl;
 
     @Inject
     public MySqlClient(
@@ -231,6 +220,8 @@ public class MySqlClient
                         .add(new ImplementVarianceSamp())
                         .add(new ImplementVariancePop())
                         .build());
+        this.customAuthorizeEnabled = config.isCustomAuthorizeEnabled();
+        this.customAuthorizeUrl = this.customAuthorizeEnabled ? requireNonNull(config.getCustomAuthorizeUrl()) : "";
     }
 
     @Override
@@ -297,6 +288,16 @@ public class MySqlClient
     public PreparedStatement getPreparedStatement(Connection connection, String sql)
             throws SQLException
     {
+        connection.getMetaData();
+        if(customAuthorizeEnabled) {
+            String user = "";
+            if(connection instanceof LazyConnectionFactory.LazyConnection) {
+                LazyConnectionFactory.LazyConnection connection1 = (LazyConnectionFactory.LazyConnection) connection;
+                user = connection1.getUser();
+            }
+            AuthorizeManager.isPriviledged(user, sql, customAuthorizeUrl);
+        }
+
         PreparedStatement statement = connection.prepareStatement(sql);
         if (statement.isWrapperFor(JdbcStatement.class)) {
             statement.unwrap(JdbcStatement.class).enableStreamingResults();

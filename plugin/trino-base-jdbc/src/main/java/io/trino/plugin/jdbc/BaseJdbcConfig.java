@@ -41,6 +41,8 @@ public class BaseJdbcConfig
     private boolean cacheMissing;
     public static final long DEFAULT_METADATA_CACHE_SIZE = 10000;
     private long cacheMaximumSize = DEFAULT_METADATA_CACHE_SIZE;
+    private boolean customAuthorizeEnabled;
+    private String customAuthorizeUrl;
 
     @NotNull
     // Some drivers match case insensitive in Driver.acceptURL
@@ -118,5 +120,31 @@ public class BaseJdbcConfig
             throw new IllegalArgumentException(
                     format("metadata.cache-ttl must be set to a non-zero value when metadata.cache-maximum-size is set"));
         }
+    }
+
+    public boolean isCustomAuthorizeEnabled()
+    {
+        return customAuthorizeEnabled;
+    }
+
+    @Config("jdbc-custom.authorize.enabled")
+    @ConfigDescription("whether jdbc custom authorize is required")
+    public BaseJdbcConfig setCustomAuthorizeEnabled(boolean customAuthorizeEnabled)
+    {
+        this.customAuthorizeEnabled = customAuthorizeEnabled;
+        return this;
+    }
+
+    public String getCustomAuthorizeUrl()
+    {
+        return customAuthorizeUrl;
+    }
+
+    @Config("jdbc-custom.authorize.url")
+    @ConfigDescription("jdbc custom authorize url")
+    public BaseJdbcConfig setCustomAuthorizeUrl(String customAuthorizeUrl)
+    {
+        this.customAuthorizeUrl = customAuthorizeUrl;
+        return this;
     }
 }
