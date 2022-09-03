@@ -42,7 +42,9 @@ public final class LazyConnectionFactory
     public Connection openConnection(ConnectorSession session)
             throws SQLException
     {
-        return new LazyConnection(() -> delegate.openConnection(session));
+        LazyConnection lazyConnection = new LazyConnection(() -> delegate.openConnection(session));
+        lazyConnection.setUser(session.getUser());
+        return lazyConnection;
     }
 
     @Override
@@ -52,7 +54,7 @@ public final class LazyConnectionFactory
         delegate.close();
     }
 
-    private static final class LazyConnection
+    public static final class LazyConnection
             extends ForwardingConnection
     {
         private final SqlSupplier<Connection> connectionSupplier;
@@ -61,6 +63,7 @@ public final class LazyConnectionFactory
         private Connection connection;
         @GuardedBy("this")
         private boolean closed;
+        private String user;
 
         public LazyConnection(SqlSupplier<Connection> connectionSupplier)
         {
@@ -86,6 +89,16 @@ public final class LazyConnectionFactory
             if (connection != null) {
                 connection.close();
             }
+        }
+
+        public String getUser()
+        {
+            return user;
+        }
+
+        public void setUser(String user)
+        {
+            this.user = user;
         }
     }
 
