@@ -148,8 +148,8 @@ import static io.trino.plugin.jdbc.TypeHandlingJdbcSessionProperties.getUnsuppor
 import static io.trino.plugin.jdbc.UnsupportedTypeHandling.CONVERT_TO_VARCHAR;
 import static io.trino.plugin.phoenix.MetadataUtil.getEscapedTableName;
 import static io.trino.plugin.phoenix.MetadataUtil.toPhoenixSchemaName;
-import static io.trino.plugin.phoenix.PhoenixClientModule.getConnectionProperties;
 import static io.trino.plugin.phoenix.PhoenixColumnProperties.isPrimaryKey;
+import static io.trino.plugin.phoenix.PhoenixDriverConnectionFactory.getConnectionProperties;
 import static io.trino.plugin.phoenix.PhoenixErrorCode.PHOENIX_METADATA_ERROR;
 import static io.trino.plugin.phoenix.PhoenixErrorCode.PHOENIX_QUERY_ERROR;
 import static io.trino.plugin.phoenix.PhoenixMetadata.DEFAULT_SCHEMA;
