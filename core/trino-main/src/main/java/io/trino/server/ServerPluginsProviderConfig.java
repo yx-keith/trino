@@ -32,4 +32,57 @@ public class ServerPluginsProviderConfig
         this.installedPluginsDir = installedPluginsDir;
         return this;
     }
+
+    private File hiveUdfDir = new File("hive-udf");
+    private boolean maxFunctionRunningTimeEnable;
+    private long maxFunctionRunningTimeInSec = 600;
+    private int functionRunningThreadPoolSize = 100;
+
+    public File getHiveUdfDir()
+    {
+        return this.hiveUdfDir;
+    }
+
+    @Config("hive-udf.dir")
+    public ServerPluginsProviderConfig setHiveUdfDir(File hiveUdfDir)
+    {
+        this.hiveUdfDir = hiveUdfDir;
+        return this;
+    }
+
+    public boolean getMaxFunctionRunningTimeEnable()
+    {
+        return this.maxFunctionRunningTimeEnable;
+    }
+
+    @Config("max-function-running-time-enable")
+    public ServerPluginsProviderConfig setMaxFunctionRunningTimeEnable(boolean maxFunctionRunningTimeEnable)
+    {
+        this.maxFunctionRunningTimeEnable = maxFunctionRunningTimeEnable;
+        return this;
+    }
+
+    public long getMaxFunctionRunningTimeInSec()
+    {
+        return this.maxFunctionRunningTimeInSec;
+    }
+
+    @Config("max-function-running-time-in-second")
+    public ServerPluginsProviderConfig setMaxFunctionRunningTimeInSec(long time)
+    {
+        this.maxFunctionRunningTimeInSec = time;
+        return this;
+    }
+
+    public int getFunctionRunningThreadPoolSize()
+    {
+        return this.functionRunningThreadPoolSize;
+    }
+
+    @Config("function-running-thread-pool-size")
+    public ServerPluginsProviderConfig setFunctionRunningThreadPoolSize(int functionRunningThreadPoolSize)
+    {
+        this.functionRunningThreadPoolSize = functionRunningThreadPoolSize;
+        return this;
+    }
 }

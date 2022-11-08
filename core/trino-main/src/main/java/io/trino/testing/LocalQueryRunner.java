@@ -475,7 +475,8 @@ public class LocalQueryRunner
                 typeRegistry,
                 blockEncodingManager,
                 handleResolver,
-                exchangeManagerRegistry);
+                exchangeManagerRegistry,
+                null);
 
         connectorManager.addConnectorFactory(globalSystemConnectorFactory, ignored -> globalSystemConnectorFactory.getClass().getClassLoader());
         connectorManager.createCatalog(GlobalSystemConnector.NAME, GlobalSystemConnector.NAME, ImmutableMap.of());

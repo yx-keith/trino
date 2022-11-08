@@ -62,6 +62,17 @@ public class FunctionMetadata
         this.deprecated = deprecated;
     }
 
+    public FunctionMetadata(
+            Signature signature,
+            FunctionNullability functionNullability,
+            boolean hidden,
+            boolean deterministic,
+            String description,
+            FunctionKind kind)
+    {
+        this(FunctionId.toFunctionId(signature), signature, signature.getName(), functionNullability, hidden, deterministic, description, kind, false);
+    }
+
     /**
      * Unique id of this function.
      * For aliased functions, each alias must have a different alias.

@@ -20,12 +20,8 @@ import io.trino.connector.ConnectorManager;
 import io.trino.eventlistener.EventListenerManager;
 import io.trino.exchange.ExchangeManagerRegistry;
 import io.trino.execution.resourcegroups.ResourceGroupManager;
-import io.trino.metadata.BlockEncodingManager;
-import io.trino.metadata.GlobalFunctionCatalog;
-import io.trino.metadata.HandleResolver;
-import io.trino.metadata.InternalFunctionBundle;
+import io.trino.metadata.*;
 import io.trino.metadata.InternalFunctionBundle.InternalFunctionBundleBuilder;
-import io.trino.metadata.TypeRegistry;
 import io.trino.security.AccessControlManager;
 import io.trino.security.GroupProviderManager;
 import io.trino.server.security.CertificateAuthenticatorManager;
@@ -71,9 +67,13 @@ public class PluginManager
             .add("com.fasterxml.jackson.annotation.")
             .add("io.airlift.slice.")
             .add("org.openjdk.jol.")
+            .add("io.trino.metadata.")
+            .add("io.trino.operator.scalar.")
             .build();
 
     private static final Logger log = Logger.get(PluginManager.class);
+
+    private static final String HIVE_FUNCTIONS_PLUGIN = "io.trino.plugin.hive.HiveUdfPlugin";
 
     private final PluginsProvider pluginsProvider;
     private final ConnectorManager connectorManager;
@@ -91,7 +91,7 @@ public class PluginManager
     private final BlockEncodingManager blockEncodingManager;
     private final HandleResolver handleResolver;
     private final AtomicBoolean pluginsLoading = new AtomicBoolean();
-
+    private final ServerPluginsProviderConfig config;
     @Inject
     public PluginManager(
             PluginsProvider pluginsProvider,
@@ -108,7 +108,8 @@ public class PluginManager
             TypeRegistry typeRegistry,
             BlockEncodingManager blockEncodingManager,
             HandleResolver handleResolver,
-            ExchangeManagerRegistry exchangeManagerRegistry)
+            ExchangeManagerRegistry exchangeManagerRegistry,
+            ServerPluginsProviderConfig serverPluginsProviderConfig)
     {
         this.pluginsProvider = requireNonNull(pluginsProvider, "pluginsProvider is null");
         this.connectorManager = requireNonNull(connectorManager, "connectorManager is null");
@@ -125,6 +126,7 @@ public class PluginManager
         this.blockEncodingManager = requireNonNull(blockEncodingManager, "blockEncodingManager is null");
         this.handleResolver = requireNonNull(handleResolver, "handleResolver is null");
         this.exchangeManagerRegistry = requireNonNull(exchangeManagerRegistry, "exchangeManagerRegistry is null");
+        this.config = requireNonNull(serverPluginsProviderConfig, "serverPluginsProviderConfig is null");
     }
 
     public void loadPlugins()
@@ -164,7 +166,15 @@ public class PluginManager
         checkState(!plugins.isEmpty(), "No service providers of type %s in the classpath: %s", Plugin.class.getName(), asList(pluginClassLoader.getURLs()));
 
         for (Plugin plugin : plugins) {
-            log.info("Installing %s", plugin.getClass().getName());
+            String pluginName = plugin.getClass().getName();
+            log.info("Installing %s", pluginName);
+
+            if(HIVE_FUNCTIONS_PLUGIN.equals(pluginName)) {
+                plugin.setExternalFunctionsDir(config.getHiveUdfDir());
+                plugin.setMaxFunctionRunningTimeEnable(config.getMaxFunctionRunningTimeEnable());
+                plugin.setMaxFunctionRunningTimeInSec(config.getMaxFunctionRunningTimeInSec());
+                plugin.setFunctionRunningThreadPoolSize(config.getFunctionRunningThreadPoolSize());
+            }
             installPlugin(plugin, pluginClassLoader::duplicate);
         }
     }
@@ -202,6 +212,14 @@ public class PluginManager
             log.info("Registering functions from %s", plugin.getClass().getSimpleName());
             InternalFunctionBundleBuilder builder = InternalFunctionBundle.builder();
             functions.forEach(builder::functions);
+            globalFunctionCatalog.addFunctions(builder.build());
+        }
+
+        Set<Object> hiveUdfs = plugin.getHiveUdfFunctions();
+        if (!hiveUdfs.isEmpty()) {
+            log.info("Registering functions from %s", plugin.getClass().getSimpleName());
+            InternalFunctionBundleBuilder builder = InternalFunctionBundle.builder();
+            hiveUdfs.forEach(udf -> builder.function((SqlFunction) udf));
             globalFunctionCatalog.addFunctions(builder.build());
         }
 
