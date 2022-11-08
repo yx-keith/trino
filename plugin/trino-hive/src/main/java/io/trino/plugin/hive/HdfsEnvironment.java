@@ -37,7 +37,7 @@ public class HdfsEnvironment
 {
     static {
         HadoopNative.requireHadoopNative();
-        FileSystemManager.registerCache(TrinoFileSystemCache.INSTANCE);
+//        FileSystemManager.registerCache(TrinoFileSystemCache.INSTANCE);
     }
 
     private final HdfsConfiguration hdfsConfiguration;
@@ -60,15 +60,36 @@ public class HdfsEnvironment
         this.newDirectoryPermissions = config.getNewDirectoryFsPermissions();
     }
 
+    public Configuration getConfiguration(Path path)
+    {
+        return hdfsConfiguration.getConfiguration(path.toUri());
+    }
+
     public Configuration getConfiguration(HdfsContext context, Path path)
     {
         return hdfsConfiguration.getConfiguration(context, path.toUri());
+    }
+
+    public FileSystem getFileSystem(Path path)
+            throws IOException
+    {
+        return getFileSystem(path, getConfiguration(path));
     }
 
     public FileSystem getFileSystem(HdfsContext context, Path path)
             throws IOException
     {
         return getFileSystem(context.getIdentity(), path, getConfiguration(context, path));
+    }
+
+    public FileSystem getFileSystem(Path path, Configuration configuration)
+            throws IOException
+    {
+        return hdfsAuthentication.doAs(() -> {
+            FileSystem fileSystem = path.getFileSystem(configuration);
+            fileSystem.setVerifyChecksum(verifyChecksum);
+            return fileSystem;
+        });
     }
 
     public FileSystem getFileSystem(ConnectorIdentity identity, Path path, Configuration configuration)

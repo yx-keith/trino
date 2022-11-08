@@ -27,6 +27,7 @@ import io.trino.spi.session.SessionPropertyConfigurationManagerFactory;
 import io.trino.spi.type.ParametricType;
 import io.trino.spi.type.Type;
 
+import java.io.File;
 import java.util.Set;
 
 import static java.util.Collections.emptyList;
@@ -103,4 +104,21 @@ public interface Plugin
     {
         return emptyList();
     }
+
+    default Set<Object> getHiveUdfFunctions()
+    {
+        return emptySet();
+    }
+
+    default void setHiveUdfLoadPath(File externalFuncsDir, String propFilePath)
+    {}
+
+    default void setMaxFunctionRunningTimeEnable(boolean enable)
+    {}
+
+    default void setMaxFunctionRunningTimeInSec(long time)
+    {}
+
+    default void setFunctionRunningThreadPoolSize(int size)
+    {}
 }

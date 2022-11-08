@@ -96,6 +96,7 @@ import io.trino.sql.analyzer.TypeSignatureProvider;
 import io.trino.sql.planner.ConnectorExpressions;
 import io.trino.sql.planner.PartitioningHandle;
 import io.trino.sql.tree.QualifiedName;
+import io.trino.transaction.TransactionId;
 import io.trino.transaction.TransactionManager;
 import io.trino.type.BlockTypeOperators;
 
@@ -2325,6 +2326,12 @@ public final class MetadataManager
         return catalogMetadata;
     }
 
+    private CatalogMetadata getCatalogMetadataRead(TransactionId transactionId, String catalogName)
+    {
+        CatalogMetadata catalogMetadata = transactionManager.getCatalogMetadataForRead(transactionId, catalogName);
+        return catalogMetadata;
+    }
+
     private CatalogMetadata getCatalogMetadataForWrite(Session session, String catalogName)
     {
         CatalogMetadata catalogMetadata = transactionManager.getCatalogMetadataForWrite(session.getRequiredTransactionId(), catalogName);
@@ -2359,6 +2366,13 @@ public final class MetadataManager
     public Set<QueryId> getActiveQueryIds()
     {
         return ImmutableSet.copyOf(catalogsByQueryId.keySet());
+    }
+
+    public boolean copyFileToLocal(String src, String dist, String catalogName)
+    {
+        CatalogMetadata catalogMetadata = getCatalogMetadataRead(TransactionId.create(), catalogName);
+        ConnectorMetadata metadata = catalogMetadata.getMetadataFor(null, new CatalogName(catalogName));
+        return metadata.copyFileToLocal(src, dist);
     }
 
     private static class QueryCatalogs

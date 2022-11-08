@@ -1328,4 +1328,9 @@ public interface ConnectorMetadata
     {
         return false;
     }
+
+    default boolean copyFileToLocal(String src, String dist)
+    {
+        return false;
+    }
 }

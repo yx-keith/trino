@@ -3632,4 +3632,9 @@ public class HiveMetadata
     {
         return true;
     }
+
+    public boolean copyFileToLocal(String src, String dist)
+    {
+        return locationService.copyFileToLocal(src, dist);
+    }
 }

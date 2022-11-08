@@ -11,16 +11,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.plugin.hive;
+package io.trino.plugin.hive.dynamicfunctions.type;
 
-import io.trino.plugin.hive.HdfsEnvironment.HdfsContext;
-import org.apache.hadoop.conf.Configuration;
+import io.trino.spi.type.Type;
 
-import java.net.URI;
+import java.util.List;
 
-public interface HdfsConfiguration
+public interface ParametricType
 {
-    Configuration getConfiguration(HdfsContext context, URI uri);
+    String getName();
 
-    Configuration getConfiguration(URI uri);
+    Type createType(List<String> params);
 }

@@ -15,6 +15,7 @@ package io.trino.transaction;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+import io.trino.Session;
 
 import java.util.Objects;
 import java.util.UUID;

@@ -18,33 +18,7 @@ import io.airlift.slice.Slice;
 import io.trino.Session;
 import io.trino.connector.CatalogName;
 import io.trino.spi.TrinoException;
-import io.trino.spi.connector.AggregateFunction;
-import io.trino.spi.connector.AggregationApplicationResult;
-import io.trino.spi.connector.BeginTableExecuteResult;
-import io.trino.spi.connector.CatalogSchemaName;
-import io.trino.spi.connector.CatalogSchemaTableName;
-import io.trino.spi.connector.ColumnHandle;
-import io.trino.spi.connector.ColumnMetadata;
-import io.trino.spi.connector.ConnectorCapabilities;
-import io.trino.spi.connector.ConnectorOutputMetadata;
-import io.trino.spi.connector.ConnectorTableMetadata;
-import io.trino.spi.connector.Constraint;
-import io.trino.spi.connector.ConstraintApplicationResult;
-import io.trino.spi.connector.JoinApplicationResult;
-import io.trino.spi.connector.JoinCondition;
-import io.trino.spi.connector.JoinStatistics;
-import io.trino.spi.connector.JoinType;
-import io.trino.spi.connector.LimitApplicationResult;
-import io.trino.spi.connector.MaterializedViewFreshness;
-import io.trino.spi.connector.ProjectionApplicationResult;
-import io.trino.spi.connector.SampleApplicationResult;
-import io.trino.spi.connector.SampleType;
-import io.trino.spi.connector.SortItem;
-import io.trino.spi.connector.SystemTable;
-import io.trino.spi.connector.TableColumnsMetadata;
-import io.trino.spi.connector.TableFunctionApplicationResult;
-import io.trino.spi.connector.TableScanRedirectApplicationResult;
-import io.trino.spi.connector.TopNApplicationResult;
+import io.trino.spi.connector.*;
 import io.trino.spi.expression.ConnectorExpression;
 import io.trino.spi.function.OperatorType;
 import io.trino.spi.predicate.TupleDomain;
@@ -718,4 +692,9 @@ public interface Metadata
      * Returns a table handle for the specified table name with a specified version
      */
     Optional<TableHandle> getTableHandle(Session session, QualifiedObjectName tableName, Optional<TableVersion> startVersion, Optional<TableVersion> endVersion);
+
+    default boolean copyFileToLocal(String src, String dist, String catalogName)
+    {
+        return false;
+    }
 }

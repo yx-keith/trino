@@ -38,8 +38,9 @@ public class StaticCatalogStore
     private static final Logger log = Logger.get(StaticCatalogStore.class);
     private final ConnectorManager connectorManager;
     private final File catalogConfigurationDir;
-    private final Set<String> disabledCatalogs;
+    private Set<String> disabledCatalogs;
     private final AtomicBoolean catalogsLoading = new AtomicBoolean();
+    private StaticCatalogStoreConfig config;
 
     @Inject
     public StaticCatalogStore(ConnectorManager connectorManager, StaticCatalogStoreConfig config)
@@ -47,6 +48,7 @@ public class StaticCatalogStore
         this(connectorManager,
                 config.getCatalogConfigurationDir(),
                 firstNonNull(config.getDisabledCatalogs(), ImmutableList.of()));
+        this.config = config;
     }
 
     public StaticCatalogStore(ConnectorManager connectorManager, File catalogConfigurationDir, List<String> disabledCatalogs)
@@ -65,12 +67,24 @@ public class StaticCatalogStore
 
         for (File file : listFiles(catalogConfigurationDir)) {
             if (file.isFile() && file.getName().endsWith(".properties")) {
-                loadCatalog(file);
+                loadCatalogs(file);
             }
         }
     }
 
-    private void loadCatalog(File file)
+    public void loadCatalogs(String catalogNamePrefix)
+            throws Exception
+    {
+        for (File file : listFiles(catalogConfigurationDir)) {
+            if (file.isFile() && file.getName().endsWith(".properties") && file.getName().startsWith(catalogNamePrefix)) {
+                loadCatalogs(file);
+            }
+            config.addDisabledCatalogs(catalogNamePrefix);
+        }
+        this.disabledCatalogs = ImmutableSet.copyOf(config.getDisabledCatalogs());
+    }
+
+    private void loadCatalogs(File file)
             throws Exception
     {
         String catalogName = Files.getNameWithoutExtension(file.getName());

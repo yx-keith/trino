@@ -21,6 +21,7 @@ import io.airlift.configuration.LegacyConfig;
 import javax.validation.constraints.NotNull;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
 public class StaticCatalogStoreConfig
@@ -28,7 +29,7 @@ public class StaticCatalogStoreConfig
     private static final Splitter SPLITTER = Splitter.on(',').trimResults().omitEmptyStrings();
 
     private File catalogConfigurationDir = new File("etc/catalog/");
-    private List<String> disabledCatalogs;
+    private List<String> disabledCatalogs = new ArrayList<>();
 
     @NotNull
     public File getCatalogConfigurationDir()
@@ -59,6 +60,12 @@ public class StaticCatalogStoreConfig
     public StaticCatalogStoreConfig setDisabledCatalogs(List<String> catalogs)
     {
         this.disabledCatalogs = (catalogs == null) ? null : ImmutableList.copyOf(catalogs);
+        return this;
+    }
+
+    public StaticCatalogStoreConfig addDisabledCatalogs(String catalog)
+    {
+        this.disabledCatalogs.add(catalog);
         return this;
     }
 }

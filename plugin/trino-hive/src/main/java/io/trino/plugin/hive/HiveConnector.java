@@ -30,6 +30,7 @@ import io.trino.spi.connector.ConnectorTransactionHandle;
 import io.trino.spi.connector.TableProcedureMetadata;
 import io.trino.spi.eventlistener.EventListener;
 import io.trino.spi.procedure.Procedure;
+import io.trino.spi.security.ConnectorIdentity;
 import io.trino.spi.session.PropertyMetadata;
 import io.trino.spi.transaction.IsolationLevel;
 
@@ -110,6 +111,14 @@ public class HiveConnector
     public ConnectorMetadata getMetadata(ConnectorSession session, ConnectorTransactionHandle transaction)
     {
         ConnectorMetadata metadata = transactionManager.get(transaction, session.getIdentity());
+        checkArgument(metadata != null, "no such transaction: %s", transaction);
+        return new ClassLoaderSafeConnectorMetadata(metadata, classLoader);
+    }
+
+    @Override
+    public ConnectorMetadata getMetadata(ConnectorTransactionHandle transaction)
+    {
+        ConnectorMetadata metadata = transactionManager.get(transaction, ConnectorIdentity.ofUser("presto"));
         checkArgument(metadata != null, "no such transaction: %s", transaction);
         return new ClassLoaderSafeConnectorMetadata(metadata, classLoader);
     }

@@ -32,4 +32,83 @@ public class ServerPluginsProviderConfig
         this.installedPluginsDir = installedPluginsDir;
         return this;
     }
+
+    private File localHiveUdfJarsPath = new File("hive-udf/jars");
+    private String remoteHiveUdfPropsPath = "hdfs://localhost:8020/user/hive/udf/props/udf.properties";
+    private String remoteHiveUdfJarsPath = "hdfs://localhost:8020/user/hive/udf/jars";
+    private boolean maxFunctionRunningTimeEnable;
+    private long maxFunctionRunningTimeInSec = 600;
+    private int functionRunningThreadPoolSize = 100;
+
+    public File getLocalHiveUdfJarsPath()
+    {
+        return this.localHiveUdfJarsPath;
+    }
+
+    @Config("hive-udf.dir")
+    public ServerPluginsProviderConfig setLocalHiveUdfJarsPath(File localHiveUdfJarsPath)
+    {
+        this.localHiveUdfJarsPath = localHiveUdfJarsPath;
+        return this;
+    }
+
+    public String getRemoteHiveUdfPropsPath()
+    {
+        return this.remoteHiveUdfPropsPath;
+    }
+
+    @Config("remote-hive-udf-props.path")
+    public ServerPluginsProviderConfig setRemoteHiveUdfPropsPath(String remoteHiveUdfPropsPath)
+    {
+        this.remoteHiveUdfPropsPath = remoteHiveUdfPropsPath;
+        return this;
+    }
+
+    public String getRemoteHiveUdfJarsPath()
+    {
+        return this.remoteHiveUdfJarsPath;
+    }
+
+    @Config("remote-hive-udf-jars.path")
+    public ServerPluginsProviderConfig setRemoteHiveUdfJarsPath(String remoteHiveUdfJarsPath)
+    {
+        this.remoteHiveUdfJarsPath = remoteHiveUdfJarsPath;
+        return this;
+    }
+
+    public boolean getMaxFunctionRunningTimeEnable()
+    {
+        return this.maxFunctionRunningTimeEnable;
+    }
+
+    @Config("max-function-running-time-enable")
+    public ServerPluginsProviderConfig setMaxFunctionRunningTimeEnable(boolean maxFunctionRunningTimeEnable)
+    {
+        this.maxFunctionRunningTimeEnable = maxFunctionRunningTimeEnable;
+        return this;
+    }
+
+    public long getMaxFunctionRunningTimeInSec()
+    {
+        return this.maxFunctionRunningTimeInSec;
+    }
+
+    @Config("max-function-running-time-in-second")
+    public ServerPluginsProviderConfig setMaxFunctionRunningTimeInSec(long time)
+    {
+        this.maxFunctionRunningTimeInSec = time;
+        return this;
+    }
+
+    public int getFunctionRunningThreadPoolSize()
+    {
+        return this.functionRunningThreadPoolSize;
+    }
+
+    @Config("function-running-thread-pool-size")
+    public ServerPluginsProviderConfig setFunctionRunningThreadPoolSize(int functionRunningThreadPoolSize)
+    {
+        this.functionRunningThreadPoolSize = functionRunningThreadPoolSize;
+        return this;
+    }
 }

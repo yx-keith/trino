@@ -67,4 +67,10 @@ public class HiveHdfsConfiguration
         }
         return config;
     }
+
+    @Override
+    public Configuration getConfiguration(URI uri)
+    {
+        return hadoopConfiguration.get();
+    }
 }

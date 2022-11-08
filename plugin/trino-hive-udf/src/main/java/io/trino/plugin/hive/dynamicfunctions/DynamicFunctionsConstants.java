@@ -11,16 +11,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.plugin.hive;
+package io.trino.plugin.hive.dynamicfunctions;
 
-import io.trino.plugin.hive.HdfsEnvironment.HdfsContext;
-import org.apache.hadoop.conf.Configuration;
-
-import java.net.URI;
-
-public interface HdfsConfiguration
+/**
+ * @author yaoxiao
+ * @version 1.0
+ * @time 2021/8/13 1:06 下午
+ */
+public class DynamicFunctionsConstants
 {
-    Configuration getConfiguration(HdfsContext context, URI uri);
+    /**
+     * max hive type construct level
+     */
+    public static final int MAX_HIVE_TYPE_STRUCT_LEVEL = 100;
 
-    Configuration getConfiguration(URI uri);
+    private DynamicFunctionsConstants()
+    {
+    }
 }

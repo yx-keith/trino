@@ -69,4 +69,9 @@ public interface TransactionManager
     ListenableFuture<Void> asyncAbort(TransactionId transactionId);
 
     void fail(TransactionId transactionId);
+
+    default CatalogMetadata getCatalogMetadataForRead(TransactionId transactionId, String catalogName)
+    {
+        return null;
+    }
 }

@@ -71,7 +71,6 @@ public interface Connector
      *
      * @deprecated use {@link #getMetadata(ConnectorSession, ConnectorTransactionHandle)}
      */
-    @Deprecated
     default ConnectorMetadata getMetadata(ConnectorTransactionHandle transactionHandle)
     {
         throw new UnsupportedOperationException();

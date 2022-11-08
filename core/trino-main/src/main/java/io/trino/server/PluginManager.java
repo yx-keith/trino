@@ -20,12 +20,8 @@ import io.trino.connector.ConnectorManager;
 import io.trino.eventlistener.EventListenerManager;
 import io.trino.exchange.ExchangeManagerRegistry;
 import io.trino.execution.resourcegroups.ResourceGroupManager;
-import io.trino.metadata.BlockEncodingManager;
-import io.trino.metadata.GlobalFunctionCatalog;
-import io.trino.metadata.HandleResolver;
-import io.trino.metadata.InternalFunctionBundle;
+import io.trino.metadata.*;
 import io.trino.metadata.InternalFunctionBundle.InternalFunctionBundleBuilder;
-import io.trino.metadata.TypeRegistry;
 import io.trino.security.AccessControlManager;
 import io.trino.security.GroupProviderManager;
 import io.trino.server.security.CertificateAuthenticatorManager;
@@ -50,6 +46,7 @@ import io.trino.spi.type.Type;
 import javax.annotation.concurrent.ThreadSafe;
 import javax.inject.Inject;
 
+import java.io.File;
 import java.net.URL;
 import java.util.List;
 import java.util.Optional;
@@ -60,6 +57,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkState;
+import static java.lang.String.format;
 import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
 
@@ -71,10 +69,15 @@ public class PluginManager
             .add("com.fasterxml.jackson.annotation.")
             .add("io.airlift.slice.")
             .add("org.openjdk.jol.")
+            .add("io.trino.metadata.")
+            .add("io.trino.operator.scalar.")
             .build();
 
     private static final Logger log = Logger.get(PluginManager.class);
 
+    private static final String HIVE_UDF_PLUGIN = "io.trino.plugin.hive.HiveUdfPlugin";
+    private static final String HIVE_PLUGIN = "io.trino.plugin.hive.HivePlugin";
+    private static final String UDF_PROPS_FILE_PATH = format("etc%sudf.properties", File.separatorChar);
     private final PluginsProvider pluginsProvider;
     private final ConnectorManager connectorManager;
     private final GlobalFunctionCatalog globalFunctionCatalog;
@@ -91,7 +94,10 @@ public class PluginManager
     private final BlockEncodingManager blockEncodingManager;
     private final HandleResolver handleResolver;
     private final AtomicBoolean pluginsLoading = new AtomicBoolean();
-
+    private final ServerPluginsProviderConfig config;
+    private final StaticCatalogStore staticCatalogStore;
+    private String pluginName;
+    private final MetadataManager metadataManager;
     @Inject
     public PluginManager(
             PluginsProvider pluginsProvider,
@@ -108,7 +114,10 @@ public class PluginManager
             TypeRegistry typeRegistry,
             BlockEncodingManager blockEncodingManager,
             HandleResolver handleResolver,
-            ExchangeManagerRegistry exchangeManagerRegistry)
+            ExchangeManagerRegistry exchangeManagerRegistry,
+            ServerPluginsProviderConfig serverPluginsProviderConfig,
+            StaticCatalogStore staticCatalogStore,
+            MetadataManager metadataManager)
     {
         this.pluginsProvider = requireNonNull(pluginsProvider, "pluginsProvider is null");
         this.connectorManager = requireNonNull(connectorManager, "connectorManager is null");
@@ -125,6 +134,9 @@ public class PluginManager
         this.blockEncodingManager = requireNonNull(blockEncodingManager, "blockEncodingManager is null");
         this.handleResolver = requireNonNull(handleResolver, "handleResolver is null");
         this.exchangeManagerRegistry = requireNonNull(exchangeManagerRegistry, "exchangeManagerRegistry is null");
+        this.config = requireNonNull(serverPluginsProviderConfig, "serverPluginsProviderConfig is null");
+        this.staticCatalogStore = requireNonNull(staticCatalogStore, "staticCatalogStore is null");
+        this.metadataManager = requireNonNull(metadataManager, "metadataManager is null");
     }
 
     public void loadPlugins()
@@ -139,6 +151,7 @@ public class PluginManager
     }
 
     private void loadPlugin(String plugin, Supplier<PluginClassLoader> createClassLoader)
+            throws Exception
     {
         log.info("-- Loading plugin %s --", plugin);
 
@@ -155,6 +168,12 @@ public class PluginManager
         }
 
         log.info("-- Finished loading plugin %s --", plugin);
+
+        if (HIVE_PLUGIN.equals(pluginName)) {
+            staticCatalogStore.loadCatalogs("hive");
+            metadataManager.copyFileToLocal(config.getRemoteHiveUdfPropsPath(), UDF_PROPS_FILE_PATH.split(String.valueOf(File.separatorChar))[0], "hive");
+            metadataManager.copyFileToLocal(config.getRemoteHiveUdfJarsPath(), config.getLocalHiveUdfJarsPath().toString(), "hive");
+        }
     }
 
     private void loadPlugin(PluginClassLoader pluginClassLoader)
@@ -164,7 +183,15 @@ public class PluginManager
         checkState(!plugins.isEmpty(), "No service providers of type %s in the classpath: %s", Plugin.class.getName(), asList(pluginClassLoader.getURLs()));
 
         for (Plugin plugin : plugins) {
-            log.info("Installing %s", plugin.getClass().getName());
+            pluginName = plugin.getClass().getName();
+            log.info("Installing %s", pluginName);
+
+            if(HIVE_UDF_PLUGIN.equals(pluginName)) {
+                plugin.setHiveUdfLoadPath(config.getLocalHiveUdfJarsPath(), UDF_PROPS_FILE_PATH);
+                plugin.setMaxFunctionRunningTimeEnable(config.getMaxFunctionRunningTimeEnable());
+                plugin.setMaxFunctionRunningTimeInSec(config.getMaxFunctionRunningTimeInSec());
+                plugin.setFunctionRunningThreadPoolSize(config.getFunctionRunningThreadPoolSize());
+            }
             installPlugin(plugin, pluginClassLoader::duplicate);
         }
     }
@@ -202,6 +229,14 @@ public class PluginManager
             log.info("Registering functions from %s", plugin.getClass().getSimpleName());
             InternalFunctionBundleBuilder builder = InternalFunctionBundle.builder();
             functions.forEach(builder::functions);
+            globalFunctionCatalog.addFunctions(builder.build());
+        }
+
+        Set<Object> hiveUdfs = plugin.getHiveUdfFunctions();
+        if (!hiveUdfs.isEmpty()) {
+            log.info("Registering functions from %s", plugin.getClass().getSimpleName());
+            InternalFunctionBundleBuilder builder = InternalFunctionBundle.builder();
+            hiveUdfs.forEach(udf -> builder.function((SqlFunction) udf));
             globalFunctionCatalog.addFunctions(builder.build());
         }
 
@@ -267,7 +302,8 @@ public class PluginManager
 
         interface Loader
         {
-            void load(String description, Supplier<PluginClassLoader> getClassLoader);
+            void load(String description, Supplier<PluginClassLoader> getClassLoader)
+                    throws Exception;
         }
 
         interface ClassLoaderFactory

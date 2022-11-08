@@ -119,8 +119,12 @@ public class InternalFunctionBundle
         try {
             scalarFunctionImplementation = uncheckedCacheGet(
                     specializedScalarCache,
-                    new FunctionKey(functionId, boundSignature),
-                    () -> specializeScalarFunction(functionId, boundSignature, functionDependencies));
+                    new FunctionKey(functionId, boundSignature), () -> {
+                        if (getSqlFunction(functionId) instanceof DynamicSqlScalarFunction) {
+                            return specializeDynamicScalarFunction(functionId, boundSignature, functionDependencies);
+                        }
+                        return specializeScalarFunction(functionId, boundSignature, functionDependencies);
+                    });
         }
         catch (UncheckedExecutionException e) {
             throwIfInstanceOf(e.getCause(), TrinoException.class);
@@ -133,6 +137,12 @@ public class InternalFunctionBundle
     {
         SqlScalarFunction function = (SqlScalarFunction) getSqlFunction(functionId);
         return function.specialize(boundSignature, functionDependencies);
+    }
+
+    private ScalarFunctionImplementation specializeDynamicScalarFunction(FunctionId functionId, BoundSignature boundSignature, FunctionDependencies functionDependencies)
+    {
+        DynamicSqlScalarFunction function = (DynamicSqlScalarFunction) getSqlFunction(functionId);
+        return function.specialize(boundSignature);
     }
 
     @Override

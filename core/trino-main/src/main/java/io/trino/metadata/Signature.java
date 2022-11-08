@@ -63,6 +63,11 @@ public class Signature
         this.variableArity = variableArity;
     }
 
+    public Signature(String name, TypeSignature returnType, List<TypeSignature> argumentTypes)
+    {
+        this(name, ImmutableList.of(), ImmutableList.of(), returnType, argumentTypes, false);
+    }
+
     public static boolean isOperatorName(String mangledName)
     {
         return mangledName.startsWith(OPERATOR_PREFIX);

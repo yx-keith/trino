@@ -17,6 +17,7 @@ import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Shorts;
 import com.google.common.primitives.SignedBytes;
+import io.airlift.log.Logger;
 import io.trino.plugin.hive.HdfsEnvironment;
 import io.trino.plugin.hive.HdfsEnvironment.HdfsContext;
 import io.trino.plugin.hive.HiveReadOnlyException;
@@ -168,6 +169,8 @@ import static org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory.getVarcharT
 
 public final class HiveWriteUtils
 {
+    private static final Logger log = Logger.get(HiveWriteUtils.class);
+
     private HiveWriteUtils()
     {
     }
@@ -798,5 +801,18 @@ public final class HiveWriteUtils
         int microsOfSecond = floorMod(epochMicros, MICROSECONDS_PER_SECOND);
         int nanosOfSecond = microsOfSecond * NANOSECONDS_PER_MICROSECOND + nanosOfMicro;
         return Timestamp.ofEpochSecond(epochSeconds, nanosOfSecond);
+    }
+
+    public static boolean getFileFromHdfs(HdfsEnvironment hdfsEnvironment, String src, String dist)
+    {
+        log.info("get file %s from hdfs to local path %s", src, dist);
+        try {
+            FileSystem fileSystem = hdfsEnvironment.getFileSystem(new Path(src));
+            fileSystem.copyToLocalFile(false, new Path(src), new Path(dist));
+            return true;
+        } catch (IOException e) {
+            log.error("fail to get file %s from hdfs to local path %s", src, dist);
+            throw new RuntimeException(e);
+        }
     }
 }

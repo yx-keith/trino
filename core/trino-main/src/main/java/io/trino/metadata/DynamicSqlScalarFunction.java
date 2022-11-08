@@ -19,14 +19,17 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static io.trino.spi.function.FunctionKind.SCALAR;
 import static java.util.Objects.requireNonNull;
 
-public abstract class SqlScalarFunction
+public abstract class DynamicSqlScalarFunction
         implements SqlFunction
 {
-    private final FunctionMetadata functionMetadata;
+    private FunctionMetadata functionMetadata;
 
-    protected SqlScalarFunction(FunctionMetadata functionMetadata)
+    protected DynamicSqlScalarFunction() {}
+
+    public void setFunctionMetadata(FunctionMetadata functionMetadata)
     {
-        this.functionMetadata = functionMetadata;
+        this.functionMetadata = requireNonNull(functionMetadata, "functionMetadata is null");
+        checkArgument(functionMetadata.getKind() == SCALAR, "function kind must be SCALAR");
     }
 
     @Override
@@ -35,13 +38,5 @@ public abstract class SqlScalarFunction
         return functionMetadata;
     }
 
-    public ScalarFunctionImplementation specialize(BoundSignature boundSignature, FunctionDependencies functionDependencies)
-    {
-        return specialize(boundSignature);
-    }
-
-    protected ScalarFunctionImplementation specialize(BoundSignature boundSignature)
-    {
-        throw new UnsupportedOperationException();
-    }
+    public abstract ScalarFunctionImplementation specialize(BoundSignature boundSignature);
 }

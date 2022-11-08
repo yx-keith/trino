@@ -42,6 +42,13 @@ public class ImpersonatingHdfsAuthentication
         return executeActionInDoAs(createProxyUser(userNameProvider.get(identity)), action);
     }
 
+    @Override
+    public <R, E extends Exception> R doAs(GenericExceptionAction<R, E> action)
+            throws E
+    {
+        return executeActionInDoAs(hadoopAuthentication.getUserGroupInformation(), action);
+    }
+
     private UserGroupInformation createProxyUser(String user)
     {
         return UserGroupInformation.createProxyUser(user, hadoopAuthentication.getUserGroupInformation());

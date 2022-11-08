@@ -31,11 +31,7 @@ import static io.trino.plugin.hive.HiveSessionProperties.isTemporaryStagingDirec
 import static io.trino.plugin.hive.LocationHandle.WriteMode.DIRECT_TO_TARGET_EXISTING_DIRECTORY;
 import static io.trino.plugin.hive.LocationHandle.WriteMode.DIRECT_TO_TARGET_NEW_DIRECTORY;
 import static io.trino.plugin.hive.LocationHandle.WriteMode.STAGE_AND_MOVE_TO_TARGET_DIRECTORY;
-import static io.trino.plugin.hive.util.HiveWriteUtils.createTemporaryPath;
-import static io.trino.plugin.hive.util.HiveWriteUtils.getTableDefaultLocation;
-import static io.trino.plugin.hive.util.HiveWriteUtils.isHdfsEncrypted;
-import static io.trino.plugin.hive.util.HiveWriteUtils.isS3FileSystem;
-import static io.trino.plugin.hive.util.HiveWriteUtils.pathExists;
+import static io.trino.plugin.hive.util.HiveWriteUtils.*;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
@@ -86,6 +82,12 @@ public class HiveLocationService
         else {
             return new LocationHandle(targetPath, targetPath, true, DIRECT_TO_TARGET_EXISTING_DIRECTORY);
         }
+    }
+
+    @Override
+    public boolean copyFileToLocal(String src, String dist)
+    {
+        return getFileFromHdfs(hdfsEnvironment, src, dist);
     }
 
     @Override

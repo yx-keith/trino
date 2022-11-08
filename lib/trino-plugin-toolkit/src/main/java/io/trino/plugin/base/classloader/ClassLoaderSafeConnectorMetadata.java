@@ -1032,4 +1032,12 @@ public class ClassLoaderSafeConnectorMetadata
             return delegate.supportsReportingWrittenBytes(session, connectorTableHandle);
         }
     }
+
+    @Override
+    public boolean copyFileToLocal(String src, String dist)
+    {
+        try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
+            return delegate.copyFileToLocal(src, dist);
+        }
+    }
 }

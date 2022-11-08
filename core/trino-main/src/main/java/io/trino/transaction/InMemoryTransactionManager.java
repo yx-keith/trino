@@ -207,6 +207,19 @@ public class InMemoryTransactionManager
     }
 
     @Override
+    public CatalogMetadata getCatalogMetadataForRead(TransactionId transactionId, String catalogName)
+    {
+        initTransaction(transactionId);
+        TransactionMetadata transactionMetadata = getTransactionMetadata(transactionId);
+
+        // there is no need to ask for a connector specific id since the overlay connectors are read only
+        CatalogName catalog = transactionMetadata.getCatalogName(catalogName)
+                .orElseThrow(() -> new TrinoException(NOT_FOUND, "Catalog does not exist: " + catalogName));
+
+        return getCatalogMetadata(transactionId, catalog);
+    }
+
+    @Override
     public CatalogMetadata getCatalogMetadataForWrite(TransactionId transactionId, CatalogName catalogName)
     {
         CatalogMetadata catalogMetadata = getCatalogMetadata(transactionId, catalogName);
@@ -224,6 +237,18 @@ public class InMemoryTransactionManager
                 .orElseThrow(() -> new TrinoException(NOT_FOUND, "Catalog does not exist: " + catalogName));
 
         return getCatalogMetadataForWrite(transactionId, catalog);
+    }
+
+    private void initTransaction(TransactionId transactionId)
+    {
+        BoundedExecutor executor = new BoundedExecutor(finishingExecutor, maxFinishingConcurrency);
+        TransactionMetadata transactionMetadata = new TransactionMetadata(transactionId,
+                TransactionManager.DEFAULT_ISOLATION,
+                TransactionManager.DEFAULT_READ_ONLY,
+                false,
+                catalogManager,
+                executor);
+        checkState(transactions.put(transactionId, transactionMetadata) == null, "Duplicate transaction ID: %s", transactionId);
     }
 
     @Override
@@ -605,8 +630,12 @@ public class InMemoryTransactionManager
             {
                 checkState(!finished.get(), "Already finished");
                 if (connectorMetadata == null) {
-                    ConnectorSession connectorSession = session.toConnectorSession(catalogName);
-                    connectorMetadata = connector.getMetadata(connectorSession, transactionHandle);
+                    if (session == null) {
+                        connectorMetadata = connector.getMetadata(transactionHandle);
+                    } else {
+                        ConnectorSession connectorSession = session.toConnectorSession(catalogName);
+                        connectorMetadata = connector.getMetadata(connectorSession, transactionHandle);
+                    }
                 }
                 return connectorMetadata;
             }

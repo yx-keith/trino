@@ -375,6 +375,13 @@ public class TrinoFileSystemCache
         {
             return fs.getFileBlockLocations(p, start, len);
         }
+
+        @Override
+        public void copyToLocalFile(boolean delSrc, Path src, Path dst)
+                throws IOException
+        {
+            fs.copyToLocalFile(delSrc, src, dst);
+        }
     }
 
     private static class OutputStreamWrapper

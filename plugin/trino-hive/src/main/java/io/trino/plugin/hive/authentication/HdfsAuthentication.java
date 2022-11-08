@@ -20,6 +20,9 @@ public interface HdfsAuthentication
     <R, E extends Exception> R doAs(ConnectorIdentity identity, GenericExceptionAction<R, E> action)
             throws E;
 
+    <R, E extends Exception> R doAs(GenericExceptionAction<R, E> action)
+            throws E;
+
     default void doAs(ConnectorIdentity identity, Runnable action)
     {
         doAs(identity, () -> {
