@@ -50,10 +50,7 @@ import io.trino.spi.type.TimestampType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.FilterFileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.viewfs.ViewFileSystem;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hive.common.type.Date;
@@ -805,10 +802,21 @@ public final class HiveWriteUtils
 
     public static boolean getFileFromHdfs(HdfsEnvironment hdfsEnvironment, String src, String dist)
     {
-        log.info("get file %s from hdfs to local path %s", src, dist);
+        Path srcPath = new Path(src);
         try {
-            FileSystem fileSystem = hdfsEnvironment.getFileSystem(new Path(src));
-            fileSystem.copyToLocalFile(false, new Path(src), new Path(dist));
+            FileSystem fileSystem = hdfsEnvironment.getFileSystem(srcPath);
+            if (fileSystem.getFileStatus(srcPath).isDirectory()) {
+                RemoteIterator<LocatedFileStatus> fileStatusIterator = fileSystem.listFiles(new Path(src), false);
+                while (fileStatusIterator.hasNext()) {
+                    Path filePath = fileStatusIterator.next().getPath();
+                    fileSystem.copyToLocalFile(false, filePath, new Path(dist), true);
+                    log.info("get file %s from hdfs to local path %s", filePath, dist);
+                }
+            } else {
+                fileSystem.copyToLocalFile(false, new Path(src), new Path(dist), true);
+                log.info("get file %s from hdfs to local path %s", src, dist);
+            }
+            fileSystem.close();
             return true;
         } catch (IOException e) {
             log.error("fail to get file %s from hdfs to local path %s", src, dist);

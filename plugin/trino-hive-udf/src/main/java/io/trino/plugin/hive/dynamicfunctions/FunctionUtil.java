@@ -16,45 +16,23 @@ package io.trino.plugin.hive.dynamicfunctions;
 import io.trino.spi.TrinoException;
 import io.trino.spi.classloader.ThreadContextClassLoader;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Type;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import static io.trino.plugin.hive.dynamicfunctions.RecognizedFunctions.isFunctionRecognized;
 import static io.trino.spi.StandardErrorCode.*;
 import static java.lang.String.format;
 
-public class FunctionMetadata
+public class FunctionUtil
 {
-    private static final Pattern FUNCTION_METADATA_PATTERN = Pattern.compile("(.*)\\s+(.*)");
-
     private String funcName;
     private String className;
     private Class<?> clazz;
-    private Map<String, Method> methodByName;
     private ClassLoader classLoader;
 
-    public FunctionMetadata(String metadata, ClassLoader classLoader)
+    public FunctionUtil(FunctionInfo functionInfo, ClassLoader classLoader)
     {
         this.classLoader = classLoader;
-        this.funcName = parseFunctionClassName(metadata)[0];
-        this.className = parseFunctionClassName(metadata)[1];
+        this.funcName = functionInfo.getFunctionName();
+        this.className = functionInfo.getFunctionClassName();
         this.initClazz();
-        this.methodByName = new HashMap<>();
-    }
-
-    // Return [funcName, className]
-    public static String[] parseFunctionClassName(String metadata)
-    {
-        Matcher matcher = FUNCTION_METADATA_PATTERN.matcher(metadata);
-        if (!matcher.matches()) {
-            throw new TrinoException(NOT_SUPPORTED, format("Cannot recognize function metadata %s.", metadata));
-        }
-
-        return new String[] {matcher.group(1).trim(), matcher.group(2).trim()};
     }
 
     private void initClazz()

@@ -42,11 +42,11 @@ public class HiveUdfClassLoader
     private final List<String> pluginResources;
 
     public HiveUdfClassLoader(
-            List<URL> urls,
+            URL url,
             ClassLoader pluginClassLoader,
             Iterable<String> pluginPackages)
     {
-        this(urls,
+        this(List.of(url),
                 pluginClassLoader,
                 pluginPackages,
                 Iterables.transform(pluginPackages, HiveUdfClassLoader::classNameToResource));

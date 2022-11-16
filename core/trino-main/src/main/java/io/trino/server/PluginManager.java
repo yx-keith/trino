@@ -48,10 +48,7 @@ import javax.inject.Inject;
 
 import java.io.File;
 import java.net.URL;
-import java.util.List;
-import java.util.Optional;
-import java.util.ServiceLoader;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -74,7 +71,6 @@ public class PluginManager
             .build();
 
     private static final Logger log = Logger.get(PluginManager.class);
-
     private static final String HIVE_UDF_PLUGIN = "io.trino.plugin.hive.HiveUdfPlugin";
     private static final String HIVE_PLUGIN = "io.trino.plugin.hive.HivePlugin";
     private static final String UDF_PROPS_FILE_PATH = format("etc%sudf.properties", File.separatorChar);
@@ -171,12 +167,13 @@ public class PluginManager
 
         if (HIVE_PLUGIN.equals(pluginName)) {
             staticCatalogStore.loadCatalogs("hive");
-            metadataManager.copyFileToLocal(config.getRemoteHiveUdfPropsPath(), UDF_PROPS_FILE_PATH.split(String.valueOf(File.separatorChar))[0], "hive");
+            metadataManager.copyFileToLocal(config.getRemoteHiveUdfPropsPath(), UDF_PROPS_FILE_PATH, "hive");
             metadataManager.copyFileToLocal(config.getRemoteHiveUdfJarsPath(), config.getLocalHiveUdfJarsPath().toString(), "hive");
         }
     }
 
     private void loadPlugin(PluginClassLoader pluginClassLoader)
+            throws Exception
     {
         ServiceLoader<Plugin> serviceLoader = ServiceLoader.load(Plugin.class, pluginClassLoader);
         List<Plugin> plugins = ImmutableList.copyOf(serviceLoader);
@@ -186,8 +183,8 @@ public class PluginManager
             pluginName = plugin.getClass().getName();
             log.info("Installing %s", pluginName);
 
-            if(HIVE_UDF_PLUGIN.equals(pluginName)) {
-                plugin.setHiveUdfLoadPath(config.getLocalHiveUdfJarsPath(), UDF_PROPS_FILE_PATH);
+            if (HIVE_UDF_PLUGIN.equals(pluginName)) {
+                plugin.initHiveUdf(config.getLocalHiveUdfJarsPath(), UDF_PROPS_FILE_PATH);
                 plugin.setMaxFunctionRunningTimeEnable(config.getMaxFunctionRunningTimeEnable());
                 plugin.setMaxFunctionRunningTimeInSec(config.getMaxFunctionRunningTimeInSec());
                 plugin.setFunctionRunningThreadPoolSize(config.getFunctionRunningThreadPoolSize());

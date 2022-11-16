@@ -13,11 +13,13 @@
  */
 package io.trino.plugin.hive;
 
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import io.airlift.log.Logger;
 import io.trino.plugin.hive.dynamicfunctions.DynamicHiveScalarFunction;
-import io.trino.plugin.hive.dynamicfunctions.FunctionMetadata;
+import io.trino.plugin.hive.dynamicfunctions.FunctionInfo;
+import io.trino.plugin.hive.dynamicfunctions.FunctionUtil;
 import io.trino.plugin.hive.dynamicfunctions.RecognizedFunctions;
 import io.trino.spi.Plugin;
 import io.trino.spi.TrinoException;
@@ -28,22 +30,20 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static io.trino.plugin.hive.dynamicfunctions.DynamicHiveScalarFunction.EVALUATE_METHOD_NAME;
-import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
 public class HiveUdfPlugin
         implements Plugin
 {
     private static final Logger log = Logger.get(HiveUdfPlugin.class);
-    private static final File HIVE_UDF_DIR = new File("hive-udf/jars");
+    private static final Splitter SPLITTER = Splitter.on(',').limit(3).trimResults().omitEmptyStrings();
+    private final Map<String, FunctionInfo> functionInfoCache = new ConcurrentHashMap<>();
+    private final Map<URL, HiveUdfClassLoader> classLoaderCache = new ConcurrentHashMap<>();
     private static final ImmutableList<String> SPI_PACKAGES = ImmutableList.<String>builder()
             .add("com.fasterxml.jackson.annotation.")
             .add("io.airlift.slice.")
@@ -53,54 +53,37 @@ public class HiveUdfPlugin
             .build();
 
     private String funcPropFilePath;
-    private ClassLoader funcClassLoader;
+    private File HIVE_UDF_DIR;
     private boolean maxFunctionRunningTimeEnable;
     private long maxFuncRunningTimeInSec;
     private int functionRunningThreadPoolSize;
 
-    public HiveUdfPlugin()
+    private void initUdfClassLoader()
+            throws Exception
     {
-        setUdfClassLoader(HIVE_UDF_DIR);
-    }
-
-    private void setUdfClassLoader(File hiveUdfDir)
-    {
-        List<URL> urls = getURLs(hiveUdfDir);
-        this.funcClassLoader = new HiveUdfClassLoader(urls, this.getClass().getClassLoader(), SPI_PACKAGES);
-        log.info("Create hive udf classloader %s, with urls: %s.", funcClassLoader, urls.toString());
+        initFunctionInfo();
+        functionInfoCache.forEach((function, functionInfo) -> {
+            URL url = functionInfo.getLocalUrl();
+            if (!classLoaderCache.containsKey(url)) {
+                HiveUdfClassLoader classLoader = new HiveUdfClassLoader(url, this.getClass().getClassLoader(), SPI_PACKAGES);
+                functionInfo.setFunctionClassLoader(classLoader);
+                classLoaderCache.put(url, classLoader);
+                log.info("Create hive udf classloader %s, with url: %s.", classLoader, url.toString());
+            } else {
+                HiveUdfClassLoader classLoader = classLoaderCache.get(url);
+                functionInfo.setFunctionClassLoader(classLoader);
+                log.info("hive udf classloader %s already exists, url is: %s.", classLoader, url.toString());
+            }
+        });
     }
 
     @Override
-    public void setHiveUdfLoadPath(File externalFunctionsDir, String propFilePath)
+    public void initHiveUdf(File functionDir, String propFilePath)
+            throws Exception
     {
         this.funcPropFilePath = requireNonNull(propFilePath, "propFilePath is null.");
-        if (!HIVE_UDF_DIR.equals(externalFunctionsDir)) {
-            setUdfClassLoader(externalFunctionsDir);
-        }
-    }
-
-    private List<URL> getURLs(File dir)
-    {
-        List<URL> urls = new ArrayList<>();
-        String dirName = dir.getName();
-        if (!dir.exists() || !dir.isDirectory()) {
-            log.debug("%s doesn't exist or is not a directory.", dirName);
-            return urls;
-        }
-        File[] files = dir.listFiles();
-        if (files == null || files.length == 0) {
-            log.debug("%s is empty.", dirName);
-            return urls;
-        }
-        for (File file : files) {
-            try {
-                urls.add(file.toURI().toURL());
-            }
-            catch (MalformedURLException e) {
-                log.error("Failed to add %s to URLs of HiveFunctionsClassLoader.", file);
-            }
-        }
-        return urls;
+        this.HIVE_UDF_DIR = requireNonNull(functionDir, "externalFunctionsDir is null.");
+        initUdfClassLoader();
     }
 
     @Override
@@ -114,30 +97,29 @@ public class HiveUdfPlugin
     public Set<Object> getHiveUdfFunctions()
     {
         Set<Object> functions = new HashSet<>();
-        if (this.funcClassLoader == null) {
+        if(functionInfoCache.isEmpty()) {
             return functions;
         }
 
-        for (String funcMetadataInfo : loadFunctionMetadataFromPropertiesFile()) {
+        functionInfoCache.forEach((function, functionInfo) -> {
+            ClassLoader functionClassLoader = functionInfo.getFunctionClassLoader();
             try {
-                RecognizedFunctions.addRecognizedFunction(FunctionMetadata.parseFunctionClassName(funcMetadataInfo)[1]);
-
-                FunctionMetadata functionMetadata = new FunctionMetadata(funcMetadataInfo, this.funcClassLoader);
-                Method[] methods = functionMetadata.getClazz().getMethods();
+                RecognizedFunctions.addRecognizedFunction(functionInfo.getFunctionClassName());
+                FunctionUtil funcUtil = new FunctionUtil(functionInfo, functionClassLoader);
+                Method[] methods = funcUtil.getClazz().getMethods();
                 for (Method method : methods) {
                     if (method.getName().equals(EVALUATE_METHOD_NAME)) {
-                        functions.add(createDynamicHiveScalarFunction(functionMetadata, method));
+                        functions.add(createDynamicHiveScalarFunction(funcUtil, method, functionClassLoader));
                     }
                 }
+            } catch (TrinoException e) {
+                log.error("Cannot load function: %s, with exception %s", functionInfo, e);
             }
-            catch (TrinoException e) {
-                log.error("Cannot load function: %s, with exception %s", funcMetadataInfo, e);
-            }
-        }
+        });
         return functions;
     }
 
-    private List<String> loadFunctionMetadataFromPropertiesFile()
+    private List<String> loadFunctionInfoFromPropertiesFile()
     {
         List<String> functionNames = new ArrayList<>();
         try (BufferedReader bufferedReader = new BufferedReader(new FileReader(this.funcPropFilePath))) {
@@ -154,11 +136,25 @@ public class HiveUdfPlugin
         return functionNames;
     }
 
-    private DynamicHiveScalarFunction createDynamicHiveScalarFunction(FunctionMetadata funcMetadata, Method method)
+    public void initFunctionInfo()
+            throws Exception
     {
-        try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(this.funcClassLoader)) {
-            return new DynamicHiveScalarFunction(funcMetadata, method.getGenericParameterTypes(), method.getGenericReturnType(),
-                    this.funcClassLoader, this.maxFunctionRunningTimeEnable, this.maxFuncRunningTimeInSec, this.functionRunningThreadPoolSize);
+        for(String functionMetaInfo : loadFunctionInfoFromPropertiesFile()) {
+            List<String> parts = SPLITTER.splitToList(functionMetaInfo);
+            String funcName = parts.get(0);
+            String funcClassName = parts.get(1);
+            String funcJarName = parts.get(2);
+            URL localUrl = new File(this.HIVE_UDF_DIR + File.separator + funcJarName).toURI().toURL();
+            FunctionInfo functionInfo = new FunctionInfo(funcName, funcClassName, funcJarName, localUrl);
+            functionInfoCache.put(funcName, functionInfo);
+        }
+    }
+
+    private DynamicHiveScalarFunction createDynamicHiveScalarFunction(FunctionUtil funcUtil, Method method, ClassLoader classLoader)
+    {
+        try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
+            return new DynamicHiveScalarFunction(funcUtil, method.getGenericParameterTypes(), method.getGenericReturnType(),
+                    classLoader, this.maxFunctionRunningTimeEnable, this.maxFuncRunningTimeInSec, this.functionRunningThreadPoolSize);
         }
     }
 

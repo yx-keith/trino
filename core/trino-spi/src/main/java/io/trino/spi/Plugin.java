@@ -110,7 +110,8 @@ public interface Plugin
         return emptySet();
     }
 
-    default void setHiveUdfLoadPath(File externalFuncsDir, String propFilePath)
+    default void initHiveUdf(File functionDir, String propFilePath)
+            throws Exception
     {}
 
     default void setMaxFunctionRunningTimeEnable(boolean enable)

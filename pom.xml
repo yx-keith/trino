@@ -97,7 +97,7 @@
         <module>core/trino-server-main</module>
         <module>core/trino-server-rpm</module>
         <module>core/trino-spi</module>
-        <module>docs</module>
+<!--        <module>docs</module>-->
         <module>lib/trino-array</module>
         <module>lib/trino-collect</module>
         <module>lib/trino-geospatial-toolkit</module>
@@ -116,22 +116,22 @@
         <module>plugin/trino-blackhole</module>
         <module>plugin/trino-cassandra</module>
         <module>plugin/trino-clickhouse</module>
-        <module>plugin/trino-delta-lake</module>
-        <module>plugin/trino-druid</module>
+<!--        <module>plugin/trino-delta-lake</module>-->
+<!--        <module>plugin/trino-druid</module>-->
         <module>plugin/trino-elasticsearch</module>
         <module>plugin/trino-example-http</module>
         <module>plugin/trino-exchange-filesystem</module>
         <module>plugin/trino-geospatial</module>
-        <module>plugin/trino-google-sheets</module>
+<!--        <module>plugin/trino-google-sheets</module>-->
         <module>plugin/trino-hive</module>
         <module>plugin/trino-hive-hadoop2</module>
         <module>plugin/trino-hive-udf</module>
         <module>plugin/trino-http-event-listener</module>
         <module>plugin/trino-iceberg</module>
         <module>plugin/trino-jmx</module>
-        <module>plugin/trino-kafka</module>
+<!--        <module>plugin/trino-kafka</module>-->
         <module>plugin/trino-kinesis</module>
-        <module>plugin/trino-kudu</module>
+<!--        <module>plugin/trino-kudu</module>-->
         <module>plugin/trino-local-file</module>
         <module>plugin/trino-mariadb</module>
         <module>plugin/trino-memory</module>
@@ -142,11 +142,11 @@
         <module>plugin/trino-password-authenticators</module>
         <module>plugin/trino-phoenix</module>
         <module>plugin/trino-phoenix5</module>
-        <module>plugin/trino-pinot</module>
+<!--        <module>plugin/trino-pinot</module>-->
         <module>plugin/trino-postgresql</module>
         <module>plugin/trino-prometheus</module>
         <module>plugin/trino-raptor-legacy</module>
-        <module>plugin/trino-redis</module>
+<!--        <module>plugin/trino-redis</module>-->
         <module>plugin/trino-redshift</module>
         <module>plugin/trino-resource-group-managers</module>
         <module>plugin/trino-session-property-managers</module>

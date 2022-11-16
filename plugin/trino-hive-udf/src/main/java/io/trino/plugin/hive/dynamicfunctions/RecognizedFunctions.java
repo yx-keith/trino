@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * A class holding all recognized class names for hive functions.
  * <p>
- * For security reasons, only the function names registered here are allowed to be used in reflection when creating {@link FunctionMetadata}
+ * For security reasons, only the function names registered here are allowed to be used in reflection when creating {@link FunctionUtil}
  */
 public class RecognizedFunctions
 {

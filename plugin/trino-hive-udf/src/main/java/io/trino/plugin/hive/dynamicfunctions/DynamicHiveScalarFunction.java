@@ -55,9 +55,8 @@ public class DynamicHiveScalarFunction
 {
     public static final String EVALUATE_METHOD_NAME = "evaluate";
     private static final int EVALUATE_METHOD_PARAM_LENGTH = 5;
-
     private ExecutorService executor;
-    private FunctionMetadata funcMetadata;
+    private FunctionUtil funcUtil;
     private java.lang.reflect.Type[] evalParamJavaTypes;
     private java.lang.reflect.Type evalReturnJavaTypes;
     private Type[] evalParamTrinoTypes;
@@ -66,11 +65,11 @@ public class DynamicHiveScalarFunction
     private boolean maxFuncRunningTimeEnable;
     private long maxFuncRunningTimeInSec;
 
-    public DynamicHiveScalarFunction(FunctionMetadata funcMetadata, java.lang.reflect.Type[] genericParameterTypes,
+    public DynamicHiveScalarFunction(FunctionUtil funcUtil, java.lang.reflect.Type[] genericParameterTypes,
                                      java.lang.reflect.Type genericReturnType, ClassLoader classLoader, boolean maxFuncRunningTimeEnable,
                                      long maxFuncRunningTimeInSec, int functionRunningThreadPoolSize)
     {
-        this.funcMetadata = funcMetadata;
+        this.funcUtil = funcUtil;
         this.evalParamJavaTypes = genericParameterTypes;
         this.evalReturnJavaTypes = genericReturnType;
         this.classLoader = classLoader;
@@ -79,7 +78,7 @@ public class DynamicHiveScalarFunction
             this.maxFuncRunningTimeInSec = maxFuncRunningTimeInSec;
             this.executor = Executors.newFixedThreadPool(functionRunningThreadPoolSize);
         }
-        setFunctionMetadata(build(funcMetadata, genericParameterTypes, genericReturnType));
+        setFunctionMetadata(build(funcUtil, genericParameterTypes, genericReturnType));
     }
 
     @Override
@@ -166,7 +165,7 @@ public class DynamicHiveScalarFunction
         if (objs.length > EVALUATE_METHOD_PARAM_LENGTH) {
             throw new TrinoException(NOT_SUPPORTED,
                     format("Cannot invoke %s for function %s as %s parameters are not supported.",
-                            EVALUATE_METHOD_NAME, funcMetadata.getClassName(), objs.length));
+                            EVALUATE_METHOD_NAME, funcUtil.getClassName(), objs.length));
         }
         Object[] hiveObjs = new Object[objs.length];
         for (int i = 0; i < objs.length; i++) {
@@ -190,11 +189,11 @@ public class DynamicHiveScalarFunction
                     : (Class<?>) paramType;
         }
         try {
-            return this.funcMetadata.getClazz().getMethod(EVALUATE_METHOD_NAME, paramTypes);
+            return this.funcUtil.getClazz().getMethod(EVALUATE_METHOD_NAME, paramTypes);
         }
         catch (NoSuchMethodException e) {
             throw new TrinoException(NOT_FOUND, format("Cannot find %s for function %s with signature: %s.",
-                    EVALUATE_METHOD_NAME, funcMetadata.getClassName(), this.getFunctionMetadata().getSignature()));
+                    EVALUATE_METHOD_NAME, funcUtil.getClassName(), this.getFunctionMetadata().getSignature()));
         }
     }
 
@@ -211,7 +210,7 @@ public class DynamicHiveScalarFunction
             }
             catch (Exception e) {
                 throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to get results for method %s of" +
-                        "  function %s, with exception: %s.", EVALUATE_METHOD_NAME, funcMetadata.getInstance(), e));
+                        "  function %s, with exception: %s.", EVALUATE_METHOD_NAME, funcUtil.getInstance(), e));
             }
         }
     }
@@ -219,11 +218,11 @@ public class DynamicHiveScalarFunction
     private Object getResult(Method method, Object[] hiveObjs)
     {
         try {
-            return method.invoke(this.funcMetadata.getInstance(), hiveObjs);
+            return method.invoke(this.funcUtil.getInstance(), hiveObjs);
         }
         catch (Exception e) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Cannot invoke %s for function %s," +
-                    " with exception: %s.", EVALUATE_METHOD_NAME, funcMetadata.getInstance(), e));
+                    " with exception: %s.", EVALUATE_METHOD_NAME, funcUtil.getInstance(), e));
         }
     }
 
@@ -239,22 +238,21 @@ public class DynamicHiveScalarFunction
         return this.getFunctionMetadata().getSignature().hashCode();
     }
 
-    private io.trino.metadata.FunctionMetadata build(FunctionMetadata funcMetadata,
-                                                     java.lang.reflect.Type[] genericParameterTypes, java.lang.reflect.Type genericReturnType)
+    private FunctionMetadata build(FunctionUtil funcUtil, java.lang.reflect.Type[] genericParameterTypes, java.lang.reflect.Type genericReturnType)
     {
         List<Boolean> argumentNullability = new ArrayList<>();
         for (int i = 0; i < genericParameterTypes.length; i++) {
             argumentNullability.add(false);
         }
 
-        return new io.trino.metadata.FunctionMetadata(
-                new Signature(funcMetadata.getFunctionName(),
+        return new FunctionMetadata(
+                new Signature(funcUtil.getFunctionName(),
                         TrinoTypeUtil.getTypeSignature(genericReturnType),
                         TrinoTypeUtil.getTypeSignatures(genericParameterTypes)),
                 new FunctionNullability(true, argumentNullability),
                 false,
                 true,
-                "hive udf: " + funcMetadata.getFunctionName(),
+                "hive udf: " + funcUtil.getFunctionName(),
                 SCALAR);
     }
 }
