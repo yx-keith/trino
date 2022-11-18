@@ -15,16 +15,20 @@ package io.trino.server;
 
 import com.google.inject.Binder;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
+import io.airlift.discovery.server.DiscoveryServerModule;
 import io.airlift.discovery.server.EmbeddedDiscoveryModule;
 
-public class CoordinatorDiscoveryModule
+public class TrinoDiscoveryServerModule
         extends AbstractConfigurationAwareModule
 {
     @Override
     protected void setup(Binder binder)
     {
-        if (buildConfigObject(ServerConfig.class).isCoordinator() &&
-                buildConfigObject(EmbeddedDiscoveryConfig.class).isEnabled()) {
+        ServerConfig serverConfig = buildConfigObject(ServerConfig.class);
+        EmbeddedDiscoveryConfig embeddedDiscoveryConfig = buildConfigObject(EmbeddedDiscoveryConfig.class);
+        if (serverConfig.isDiscoveryServerNode()) {
+            install(new DiscoveryServerModule());
+        } else if (serverConfig.isCoordinator() && embeddedDiscoveryConfig.isEnabled()) {
             install(new EmbeddedDiscoveryModule());
         }
     }

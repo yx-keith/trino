@@ -35,7 +35,7 @@ public class TestEmbeddedDiscoveryConfig
     public void testExplicitPropertyMappings()
     {
         Map<String, String> properties = ImmutableMap.<String, String>builder()
-                .put("discovery-server.enabled", "false")
+                .put("coordinator-embedded-discovery-server.enabled", "false")
                 .buildOrThrow();
 
         EmbeddedDiscoveryConfig expected = new EmbeddedDiscoveryConfig()

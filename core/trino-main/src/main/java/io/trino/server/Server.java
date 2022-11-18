@@ -23,6 +23,7 @@ import com.google.inject.TypeLiteral;
 import com.google.inject.util.Types;
 import io.airlift.bootstrap.ApplicationConfigurationException;
 import io.airlift.bootstrap.Bootstrap;
+import io.airlift.configuration.ConfigurationLoader;
 import io.airlift.discovery.client.Announcer;
 import io.airlift.discovery.client.DiscoveryModule;
 import io.airlift.discovery.client.ServiceAnnouncement;
@@ -76,6 +77,8 @@ import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 
 public class Server
 {
+    private static boolean isDiscoveryServerNode;
+    private static final Logger log = Logger.get(Server.class);
     public final void start(String trinoVersion)
     {
         new EmbedVersion(trinoVersion).embedVersion(() -> doStart(trinoVersion)).run();
@@ -86,85 +89,118 @@ public class Server
         verifyJvmRequirements();
         verifySystemTimeIsReasonable();
 
-        Logger log = Logger.get(Server.class);
         log.info("Java version: %s", StandardSystemProperty.JAVA_VERSION.value());
 
-        ImmutableList.Builder<Module> modules = ImmutableList.builder();
-        modules.add(
-                new NodeModule(),
-                new DiscoveryModule(),
-                new HttpServerModule(),
-                new JsonModule(),
-                new JaxrsModule(),
-                new MBeanModule(),
-                new PrefixObjectNameGeneratorModule("io.trino"),
-                new JmxModule(),
-                new JmxHttpModule(),
-                new LogJmxModule(),
-                new TraceTokenModule(),
-                new EventModule(),
-                new JsonEventModule(),
-                new ServerSecurityModule(),
-                new AccessControlModule(),
-                new EventListenerModule(),
-                new ExchangeManagerModule(),
-                new CoordinatorDiscoveryModule(),
-                new ServerMainModule(trinoVersion),
-                new GracefulShutdownModule(),
-                new WarningCollectorModule());
-
-        modules.addAll(getAdditionalModules());
-
-        Bootstrap app = new Bootstrap(modules.build());
-
         try {
-            Injector injector = app.initialize();
-
-            log.info("Trino version: %s", injector.getInstance(NodeVersion.class).getVersion());
-            logLocation(log, "Working directory", Paths.get("."));
-            logLocation(log, "Etc directory", Paths.get("etc"));
-
-            injector.getInstance(PluginManager.class).loadPlugins();
-
-            injector.getInstance(StaticCatalogStore.class).loadCatalogs();
-
-            // TODO: remove this huge hack
-            updateConnectorIds(injector.getInstance(Announcer.class), injector.getInstance(CatalogManager.class));
-
-            injector.getInstance(SessionPropertyDefaults.class).loadConfigurationManager();
-            injector.getInstance(ResourceGroupManager.class).loadConfigurationManager();
-            injector.getInstance(AccessControlManager.class).loadSystemAccessControl();
-            injector.getInstance(optionalKey(PasswordAuthenticatorManager.class))
-                    .ifPresent(PasswordAuthenticatorManager::loadPasswordAuthenticator);
-            injector.getInstance(EventListenerManager.class).loadEventListeners();
-            injector.getInstance(GroupProviderManager.class).loadConfiguredGroupProvider();
-            injector.getInstance(ExchangeManagerRegistry.class).loadExchangeManager();
-            injector.getInstance(CertificateAuthenticatorManager.class).loadCertificateAuthenticator();
-            injector.getInstance(optionalKey(HeaderAuthenticatorManager.class))
-                    .ifPresent(HeaderAuthenticatorManager::loadHeaderAuthenticator);
-
-            injector.getInstance(optionalKey(OAuth2Client.class)).ifPresent(OAuth2Client::load);
-
-            injector.getInstance(Announcer.class).start();
-
-            injector.getInstance(StartupStatus.class).startupComplete();
-
-            log.info("======== SERVER STARTED ========");
+            isDiscoveryServerNode = Boolean.parseBoolean(ConfigurationLoader.loadProperties().get("discovery-server.node"));
+        } catch (IOException e) {
+            log.error("get discovery-server.node from %s is error, please check!", System.getProperty("config"));
         }
-        catch (ApplicationConfigurationException e) {
-            StringBuilder message = new StringBuilder();
-            message.append("Configuration is invalid\n");
-            message.append("==========\n");
-            addMessages(message, "Errors", ImmutableList.copyOf(e.getErrors()));
-            addMessages(message, "Warnings", ImmutableList.copyOf(e.getWarnings()));
-            message.append("\n");
-            message.append("==========");
-            log.error("%s", message);
-            System.exit(1);
-        }
-        catch (Throwable e) {
-            log.error(e);
-            System.exit(1);
+
+        ImmutableList.Builder<Module> modules = ImmutableList.builder();
+        initServer(modules, isDiscoveryServerNode, trinoVersion);
+    }
+
+    private void initServer(ImmutableList.Builder<Module> modules, boolean isExclusiveDiscoveryServerNode, String trinoVersion)
+    {
+        if (isExclusiveDiscoveryServerNode) {
+            modules.add(
+                    new MBeanModule(),
+                    new NodeModule(),
+                    new HttpServerModule(),
+                    new JaxrsModule(),
+                    new JsonModule(),
+                    new JmxModule(),
+                    new JmxHttpModule(),
+                    new TrinoDiscoveryServerModule(),
+                    new EventModule(),
+                    new TraceTokenModule(),
+                    new DiscoveryModule());
+            Bootstrap app = new Bootstrap(modules.build());
+            try {
+                app.initialize();
+                log.info("======== SERVER STARTED ========");
+            } catch (Throwable e) {
+                log.error(e);
+                System.exit(1);
+            }
+        } else {
+            modules.add(
+                    new NodeModule(),
+                    new DiscoveryModule(),
+                    new HttpServerModule(),
+                    new JsonModule(),
+                    new JaxrsModule(),
+                    new MBeanModule(),
+                    new PrefixObjectNameGeneratorModule("io.trino"),
+                    new JmxModule(),
+                    new JmxHttpModule(),
+                    new LogJmxModule(),
+                    new TraceTokenModule(),
+                    new EventModule(),
+                    new JsonEventModule(),
+                    new ServerSecurityModule(),
+                    new AccessControlModule(),
+                    new EventListenerModule(),
+                    new ExchangeManagerModule(),
+                    new TrinoDiscoveryServerModule(),
+                    new ServerMainModule(trinoVersion),
+                    new GracefulShutdownModule(),
+                    new WarningCollectorModule());
+
+            modules.addAll(getAdditionalModules());
+
+            Bootstrap app = new Bootstrap(modules.build());
+
+            try {
+                Injector injector = app.initialize();
+
+                log.info("Trino version: %s", injector.getInstance(NodeVersion.class).getVersion());
+                logLocation(log, "Working directory", Paths.get("."));
+                logLocation(log, "Etc directory", Paths.get("etc"));
+
+                injector.getInstance(PluginManager.class).loadPlugins();
+
+                injector.getInstance(StaticCatalogStore.class).loadCatalogs();
+
+                // TODO: remove this huge hack
+                updateConnectorIds(injector.getInstance(Announcer.class), injector.getInstance(CatalogManager.class));
+
+                injector.getInstance(SessionPropertyDefaults.class).loadConfigurationManager();
+                injector.getInstance(ResourceGroupManager.class).loadConfigurationManager();
+                injector.getInstance(AccessControlManager.class).loadSystemAccessControl();
+                injector.getInstance(optionalKey(PasswordAuthenticatorManager.class))
+                        .ifPresent(PasswordAuthenticatorManager::loadPasswordAuthenticator);
+                injector.getInstance(EventListenerManager.class).loadEventListeners();
+                injector.getInstance(GroupProviderManager.class).loadConfiguredGroupProvider();
+                injector.getInstance(ExchangeManagerRegistry.class).loadExchangeManager();
+                injector.getInstance(CertificateAuthenticatorManager.class).loadCertificateAuthenticator();
+                injector.getInstance(optionalKey(HeaderAuthenticatorManager.class))
+                        .ifPresent(HeaderAuthenticatorManager::loadHeaderAuthenticator);
+
+                injector.getInstance(optionalKey(OAuth2Client.class)).ifPresent(OAuth2Client::load);
+
+                injector.getInstance(Announcer.class).start();
+
+                injector.getInstance(StartupStatus.class).startupComplete();
+
+                log.info("======== SERVER STARTED ========");
+            }
+            catch (ApplicationConfigurationException e) {
+                StringBuilder message = new StringBuilder();
+                message.append("Configuration is invalid\n");
+                message.append("==========\n");
+                addMessages(message, "Errors", ImmutableList.copyOf(e.getErrors()));
+                addMessages(message, "Warnings", ImmutableList.copyOf(e.getWarnings()));
+                message.append("\n");
+                message.append("==========");
+                log.error("%s", message);
+                System.exit(1);
+            }
+            catch (Throwable e) {
+                log.error(e);
+                System.exit(1);
+            }
         }
     }
 

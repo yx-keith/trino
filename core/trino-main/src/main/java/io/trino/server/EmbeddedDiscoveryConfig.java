@@ -26,7 +26,7 @@ public class EmbeddedDiscoveryConfig
     }
 
     @Deprecated
-    @Config("discovery-server.enabled")
+    @Config("coordinator-embedded-discovery-server.enabled")
     public EmbeddedDiscoveryConfig setEnabled(boolean enabled)
     {
         this.enabled = enabled;

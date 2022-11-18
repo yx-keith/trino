@@ -26,11 +26,24 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 public class ServerConfig
 {
     private boolean coordinator = true;
+    private boolean discoveryServerNode;
     private boolean concurrentStartup;
     private boolean includeExceptionInResponse = true;
     private Duration gracePeriod = new Duration(2, MINUTES);
     private boolean queryResultsCompressionEnabled = true;
     private Optional<String> queryInfoUrlTemplate = Optional.empty();
+
+    public boolean isDiscoveryServerNode()
+    {
+        return discoveryServerNode;
+    }
+
+    @Config("discovery-server.node")
+    public ServerConfig setDiscoveryServerNode(boolean discoveryServerNode)
+    {
+        this.discoveryServerNode = discoveryServerNode;
+        return this;
+    }
 
     public boolean isCoordinator()
     {
