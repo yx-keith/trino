@@ -167,8 +167,10 @@ public class PluginManager
 
         if (HIVE_PLUGIN.equals(pluginName)) {
             staticCatalogStore.loadCatalogs("hive");
-            metadataManager.copyFileToLocal(config.getRemoteHiveUdfPropsPath(), UDF_PROPS_FILE_PATH, "hive");
-            metadataManager.copyFileToLocal(config.getRemoteHiveUdfJarsPath(), config.getLocalHiveUdfJarsPath().toString(), "hive");
+            if (config.isLoadHiveUdfFromHdfs()) {
+                metadataManager.copyFileToLocal(config.getRemoteHiveUdfPropsPath(), UDF_PROPS_FILE_PATH, "hive", true);
+                metadataManager.copyFileToLocal(config.getRemoteHiveUdfJarsPath(), config.getLocalHiveUdfJarsPath().toString(), "hive", false);
+            }
         }
     }
 

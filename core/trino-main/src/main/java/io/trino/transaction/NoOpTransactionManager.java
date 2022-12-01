@@ -85,6 +85,12 @@ public class NoOpTransactionManager
     }
 
     @Override
+    public CatalogMetadata getCatalogMetadataForRead(TransactionId transactionId, String catalogName)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public CatalogMetadata getCatalogMetadataForWrite(TransactionId transactionId, CatalogName catalogName)
     {
         throw new UnsupportedOperationException();

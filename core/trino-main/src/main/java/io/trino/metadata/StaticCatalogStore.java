@@ -13,6 +13,7 @@
  */
 package io.trino.metadata;
 
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkState;
@@ -36,6 +38,7 @@ import static io.airlift.configuration.ConfigurationLoader.loadPropertiesFrom;
 public class StaticCatalogStore
 {
     private static final Logger log = Logger.get(StaticCatalogStore.class);
+    private static final Splitter SPLITTER = Splitter.on('.').limit(2).trimResults().omitEmptyStrings();
     private final ConnectorManager connectorManager;
     private final File catalogConfigurationDir;
     private Set<String> disabledCatalogs;
@@ -78,8 +81,9 @@ public class StaticCatalogStore
         for (File file : listFiles(catalogConfigurationDir)) {
             if (file.isFile() && file.getName().endsWith(".properties") && file.getName().startsWith(catalogNamePrefix)) {
                 loadCatalogs(file);
+                String catalog = SPLITTER.splitToList(file.getName()).get(0);
+                config.addDisabledCatalogs(catalog);
             }
-            config.addDisabledCatalogs(catalogNamePrefix);
         }
         this.disabledCatalogs = ImmutableSet.copyOf(config.getDisabledCatalogs());
     }

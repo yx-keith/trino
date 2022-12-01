@@ -85,9 +85,9 @@ public class HiveLocationService
     }
 
     @Override
-    public boolean copyFileToLocal(String src, String dist)
+    public boolean copyFileToLocal(String src, String dist, boolean distIsFile)
     {
-        return getFileFromHdfs(hdfsEnvironment, src, dist);
+        return getFileFromHdfs(hdfsEnvironment, src, dist, distIsFile);
     }
 
     @Override

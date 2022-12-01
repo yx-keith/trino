@@ -36,6 +36,7 @@ public class ServerPluginsProviderConfig
     private File localHiveUdfJarsPath = new File("hive-udf/jars");
     private String remoteHiveUdfPropsPath = "hdfs://localhost:8020/user/hive/udf/props/udf.properties";
     private String remoteHiveUdfJarsPath = "hdfs://localhost:8020/user/hive/udf/jars";
+    private boolean isLoadHiveUdfFromHdfs;
     private boolean maxFunctionRunningTimeEnable;
     private long maxFunctionRunningTimeInSec = 600;
     private int functionRunningThreadPoolSize = 100;
@@ -45,7 +46,7 @@ public class ServerPluginsProviderConfig
         return this.localHiveUdfJarsPath;
     }
 
-    @Config("hive-udf.dir")
+    @Config("local-hive-udf.dir")
     public ServerPluginsProviderConfig setLocalHiveUdfJarsPath(File localHiveUdfJarsPath)
     {
         this.localHiveUdfJarsPath = localHiveUdfJarsPath;
@@ -73,6 +74,18 @@ public class ServerPluginsProviderConfig
     public ServerPluginsProviderConfig setRemoteHiveUdfJarsPath(String remoteHiveUdfJarsPath)
     {
         this.remoteHiveUdfJarsPath = remoteHiveUdfJarsPath;
+        return this;
+    }
+
+    public boolean isLoadHiveUdfFromHdfs()
+    {
+        return isLoadHiveUdfFromHdfs;
+    }
+
+    @Config("load-hive-udf.from-hdfs")
+    public ServerPluginsProviderConfig setLoadHiveUdfFromHdfs(boolean loadHiveUdfFromHdfs)
+    {
+        isLoadHiveUdfFromHdfs = loadHiveUdfFromHdfs;
         return this;
     }
 

@@ -81,6 +81,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.Reporter;
 import org.joda.time.DateTimeZone;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.math.BigInteger;
@@ -800,8 +801,18 @@ public final class HiveWriteUtils
         return Timestamp.ofEpochSecond(epochSeconds, nanosOfSecond);
     }
 
-    public static boolean getFileFromHdfs(HdfsEnvironment hdfsEnvironment, String src, String dist)
+    public static boolean getFileFromHdfs(HdfsEnvironment hdfsEnvironment, String src, String dist, boolean distIsFile)
     {
+        if (!distIsFile) {
+            File file = new File(dist);
+            if (!file.exists()) {
+                file.mkdirs();
+            } else {
+                file.delete();
+                file.mkdirs();
+            }
+        }
+
         Path srcPath = new Path(src);
         try {
             FileSystem fileSystem = hdfsEnvironment.getFileSystem(srcPath);

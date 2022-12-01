@@ -45,7 +45,7 @@ public interface LocationService
      */
     WriteInfo getPartitionWriteInfo(LocationHandle locationHandle, Optional<Partition> partition, String partitionName);
 
-    boolean copyFileToLocal(String src, String dist);
+    boolean copyFileToLocal(String src, String dist, boolean distIsFile);
     class WriteInfo
     {
         private final Path targetPath;
