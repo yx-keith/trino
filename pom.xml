@@ -124,8 +124,8 @@
         <module>plugin/trino-geospatial</module>
 <!--        <module>plugin/trino-google-sheets</module>-->
         <module>plugin/trino-hive</module>
+        <module>plugin/trino-hive-function-namespace</module>
         <module>plugin/trino-hive-hadoop2</module>
-        <module>plugin/trino-hive-udf</module>
         <module>plugin/trino-http-event-listener</module>
         <module>plugin/trino-iceberg</module>
         <module>plugin/trino-jmx</module>

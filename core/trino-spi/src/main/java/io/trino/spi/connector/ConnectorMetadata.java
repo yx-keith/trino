@@ -18,6 +18,8 @@ import io.trino.spi.TrinoException;
 import io.trino.spi.expression.ConnectorExpression;
 import io.trino.spi.expression.Constant;
 import io.trino.spi.expression.Variable;
+import io.trino.spi.function.DynamicHiveFunctionInfo;
+import io.trino.spi.function.HiveFunctionKey;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.ptf.ConnectorTableFunctionHandle;
 import io.trino.spi.security.GrantInfo;
@@ -1329,8 +1331,18 @@ public interface ConnectorMetadata
         return false;
     }
 
-    default boolean copyFileToLocal(String src, String dist)
+    default boolean copyFileToLocal(String src, String dist, boolean distIsFile)
     {
         return false;
+    }
+
+    default List<DynamicHiveFunctionInfo> getAllFunctions()
+    {
+        return null;
+    }
+
+    default DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    {
+        return null;
     }
 }

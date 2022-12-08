@@ -45,6 +45,7 @@ import io.trino.plugin.hive.metastore.PartitionWithStatistics;
 import io.trino.plugin.hive.metastore.thrift.ThriftMetastoreAuthenticationConfig.ThriftMetastoreAuthenticationType;
 import io.trino.plugin.hive.util.RetryDriver;
 import io.trino.spi.TrinoException;
+import io.trino.spi.function.DynamicHiveFunctionInfo;
 import io.trino.spi.connector.SchemaNotFoundException;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
@@ -308,6 +309,51 @@ public class ThriftHiveMetastore
         }
         catch (NoSuchObjectException e) {
             return ImmutableList.of();
+        }
+        catch (TException e) {
+            throw new TrinoException(HIVE_METASTORE_ERROR, e);
+        }
+        catch (Exception e) {
+            throw propagate(e);
+        }
+    }
+
+    @Override
+    public List<DynamicHiveFunctionInfo> getAllFunctions(HiveIdentity identity)
+    {
+        try {
+            return retry()
+                    .stopOn(NoSuchObjectException.class)
+                    .stopOnIllegalExceptions()
+                    .run("getAllFunctions", () -> {
+                        try (ThriftMetastoreClient client = createMetastoreClient(identity)) {
+                            return client.getAllFunctions();
+                        }
+                    });
+        }
+        catch (NoSuchObjectException e) {
+            return ImmutableList.of();
+        }
+        catch (TException e) {
+            throw new TrinoException(HIVE_METASTORE_ERROR, e);
+        }
+        catch (Exception e) {
+            throw propagate(e);
+        }
+    }
+
+    @Override
+    public DynamicHiveFunctionInfo getFunction(HiveIdentity identity, String dbName, String functionName)
+    {
+        try {
+            return retry()
+                    .stopOn(NoSuchObjectException.class)
+                    .stopOnIllegalExceptions()
+                    .run("getAllFunctions", () -> {
+                        try (ThriftMetastoreClient client = createMetastoreClient(identity)) {
+                            return client.getFunction(dbName, functionName);
+                        }
+                    });
         }
         catch (TException e) {
             throw new TrinoException(HIVE_METASTORE_ERROR, e);

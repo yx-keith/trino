@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import io.trino.Session;
 import io.trino.spi.TrinoException;
+import io.trino.spi.function.*;
 import io.trino.spi.type.NamedTypeSignature;
 import io.trino.spi.type.ParameterKind;
 import io.trino.spi.type.RowType;

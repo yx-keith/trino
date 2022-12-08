@@ -19,7 +19,7 @@ import io.trino.FullConnectorSession;
 import io.trino.Session;
 import io.trino.collect.cache.NonEvictableCache;
 import io.trino.json.ir.IrPathNode;
-import io.trino.metadata.BoundSignature;
+import io.trino.spi.function.BoundSignature;
 import io.trino.metadata.Metadata;
 import io.trino.metadata.OperatorNotFoundException;
 import io.trino.metadata.ResolvedFunction;

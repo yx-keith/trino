@@ -21,7 +21,7 @@ import com.google.common.collect.MoreCollectors;
 import io.airlift.log.Logger;
 import io.trino.metadata.FunctionBinding;
 import io.trino.metadata.FunctionDependencies;
-import io.trino.metadata.Signature;
+import io.trino.spi.function.Signature;
 import io.trino.operator.ParametricImplementationsGroup;
 import io.trino.operator.aggregation.AggregationMetadata.AccumulatorStateDescriptor;
 import io.trino.operator.aggregation.state.InOutStateSerializer;

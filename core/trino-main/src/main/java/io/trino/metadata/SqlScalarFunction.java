@@ -14,9 +14,11 @@
 package io.trino.metadata;
 
 import io.trino.operator.scalar.ScalarFunctionImplementation;
+import io.trino.spi.function.BoundSignature;
+import io.trino.spi.function.FunctionMetadata;
+import io.trino.spi.function.SqlFunction;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static io.trino.spi.function.FunctionKind.SCALAR;
 import static java.util.Objects.requireNonNull;
 
 public abstract class SqlScalarFunction

@@ -45,8 +45,10 @@ import io.trino.plugin.hive.metastore.Table;
 import io.trino.plugin.hive.metastore.TablesWithParameterCacheKey;
 import io.trino.plugin.hive.metastore.UserTableKey;
 import io.trino.spi.TrinoException;
+import io.trino.spi.function.DynamicHiveFunctionInfo;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
+import io.trino.spi.function.HiveFunctionKey;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.RoleGrant;
 import io.trino.spi.statistics.ColumnStatisticType;
@@ -107,6 +109,8 @@ public class CachingHiveMetastore
     private final LoadingCache<String, List<String>> databaseNamesCache;
     private final LoadingCache<HiveTableName, Optional<Table>> tableCache;
     private final LoadingCache<String, List<String>> tableNamesCache;
+    private final LoadingCache<String, List<DynamicHiveFunctionInfo>> allFunctionsCache;
+    private final LoadingCache<HiveFunctionKey, DynamicHiveFunctionInfo> functionCache;
     private final LoadingCache<TablesWithParameterCacheKey, List<String>> tablesWithParameterCache;
     private final LoadingCache<HiveTableName, PartitionStatistics> tableStatisticsCache;
     private final LoadingCache<HivePartitionName, PartitionStatistics> partitionStatisticsCache;
@@ -156,6 +160,10 @@ public class CachingHiveMetastore
         databaseCache = buildCache(expiresAfterWriteMillis, refreshMills, executor, maximumSize, statsRecording, this::loadDatabase);
 
         tableNamesCache = buildCache(expiresAfterWriteMillis, refreshMills, executor, maximumSize, statsRecording, this::loadAllTables);
+
+        allFunctionsCache = buildCache(expiresAfterWriteMillis, refreshMills, executor, maximumSize, statsRecording, ignored -> loadAllFunctions());
+
+        functionCache = buildCache(expiresAfterWriteMillis, refreshMills, executor, maximumSize, statsRecording, this::loadFunction);
 
         tablesWithParameterCache = buildCache(expiresAfterWriteMillis, refreshMills, executor, maximumSize, statsRecording, this::loadTablesMatchingParameter);
 
@@ -215,6 +223,7 @@ public class CachingHiveMetastore
     {
         databaseNamesCache.invalidateAll();
         tableNamesCache.invalidateAll();
+        allFunctionsCache.invalidateAll();
         viewNamesCache.invalidateAll();
         databaseCache.invalidateAll();
         tableCache.invalidateAll();
@@ -418,6 +427,28 @@ public class CachingHiveMetastore
     private List<String> loadAllTables(String databaseName)
     {
         return delegate.getAllTables(databaseName);
+    }
+
+    @Override
+    public List<DynamicHiveFunctionInfo> getAllFunctions()
+    {
+        return get(allFunctionsCache, "");
+    }
+
+    private List<DynamicHiveFunctionInfo> loadAllFunctions()
+    {
+        return delegate.getAllFunctions();
+    }
+
+    @Override
+    public DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    {
+        return get(functionCache, key);
+    }
+
+    private DynamicHiveFunctionInfo loadFunction(HiveFunctionKey key)
+    {
+        return delegate.getFunction(key);
     }
 
     @Override

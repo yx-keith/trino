@@ -16,7 +16,7 @@ package io.trino.operator.annotations;
 import com.google.common.collect.ImmutableSet;
 import io.trino.metadata.FunctionBinding;
 import io.trino.metadata.FunctionDependencies;
-import io.trino.metadata.FunctionDependencyDeclaration.FunctionDependencyDeclarationBuilder;
+import io.trino.spi.function.FunctionDependencyDeclaration.FunctionDependencyDeclarationBuilder;
 import io.trino.spi.function.CastDependency;
 import io.trino.spi.function.Convention;
 import io.trino.spi.function.FunctionDependency;

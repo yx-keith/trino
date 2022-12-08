@@ -68,14 +68,14 @@
         </artifact>
     </artifactSet>
 
-    <artifactSet to="plugin/hive">
-        <artifact id="${project.groupId}:trino-hive-hadoop2:zip:${project.version}">
+    <artifactSet to="plugin/hive-function-namepace">
+        <artifact id="${project.groupId}:trino-hive-function-namespace:zip:${project.version}">
             <unpack />
         </artifact>
     </artifactSet>
 
-    <artifactSet to="plugin/hive-udf">
-        <artifact id="${project.groupId}:trino-hive-udf:zip:${project.version}">
+    <artifactSet to="plugin/hive">
+        <artifact id="${project.groupId}:trino-hive-hadoop2:zip:${project.version}">
             <unpack />
         </artifact>
     </artifactSet>

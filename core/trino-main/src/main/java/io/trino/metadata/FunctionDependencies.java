@@ -15,8 +15,10 @@ package io.trino.metadata;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.trino.spi.function.FunctionNullability;
 import io.trino.spi.function.InvocationConvention;
 import io.trino.spi.function.OperatorType;
+import io.trino.spi.function.Signature;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeSignature;
 import io.trino.sql.tree.QualifiedName;
@@ -30,9 +32,9 @@ import java.util.stream.Collectors;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
-import static io.trino.metadata.Signature.isOperatorName;
-import static io.trino.metadata.Signature.unmangleOperator;
 import static io.trino.spi.function.OperatorType.CAST;
+import static io.trino.spi.function.Signature.isOperatorName;
+import static io.trino.spi.function.Signature.unmangleOperator;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;

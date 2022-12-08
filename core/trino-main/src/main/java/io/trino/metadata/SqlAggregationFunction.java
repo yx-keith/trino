@@ -16,6 +16,9 @@ package io.trino.metadata;
 import com.google.common.collect.ImmutableList;
 import io.trino.operator.aggregation.AggregationFromAnnotationsParser;
 import io.trino.operator.aggregation.AggregationMetadata;
+import io.trino.spi.function.BoundSignature;
+import io.trino.spi.function.FunctionMetadata;
+import io.trino.spi.function.SqlFunction;
 
 import java.util.List;
 

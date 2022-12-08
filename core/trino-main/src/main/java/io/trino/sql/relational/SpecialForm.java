@@ -15,9 +15,9 @@ package io.trino.sql.relational;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import io.trino.metadata.BoundSignature;
+import io.trino.spi.function.Signature;
+import io.trino.spi.function.BoundSignature;
 import io.trino.metadata.ResolvedFunction;
-import io.trino.metadata.Signature;
 import io.trino.spi.function.OperatorType;
 import io.trino.spi.type.Type;
 

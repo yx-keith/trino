@@ -32,9 +32,11 @@ import io.trino.plugin.hive.metastore.PrincipalPrivileges;
 import io.trino.plugin.hive.metastore.Table;
 import io.trino.plugin.hive.util.HiveUtil;
 import io.trino.spi.TrinoException;
+import io.trino.spi.function.DynamicHiveFunctionInfo;
 import io.trino.spi.connector.SchemaNotFoundException;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
+import io.trino.spi.function.HiveFunctionKey;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.RoleGrant;
 import io.trino.spi.statistics.ColumnStatisticType;
@@ -144,6 +146,18 @@ public class BridgingHiveMetastore
     public List<String> getAllTables(String databaseName)
     {
         return delegate.getAllTables(identity, databaseName);
+    }
+
+    @Override
+    public List<DynamicHiveFunctionInfo> getAllFunctions()
+    {
+        return delegate.getAllFunctions(identity);
+    }
+
+    @Override
+    public DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    {
+        return delegate.getFunction(identity, key.getSchemaname(), key.getFunctionName());
     }
 
     @Override

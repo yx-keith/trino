@@ -24,6 +24,7 @@ import io.trino.plugin.hive.metastore.HivePrivilegeInfo;
 import io.trino.plugin.hive.metastore.HivePrivilegeInfo.HivePrivilege;
 import io.trino.plugin.hive.metastore.PartitionWithStatistics;
 import io.trino.spi.TrinoException;
+import io.trino.spi.function.DynamicHiveFunctionInfo;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
 import io.trino.spi.predicate.TupleDomain;
@@ -64,6 +65,16 @@ public interface ThriftMetastore
     List<String> getAllDatabases(HiveIdentity identity);
 
     List<String> getAllTables(HiveIdentity identity, String databaseName);
+
+    default List<DynamicHiveFunctionInfo> getAllFunctions(HiveIdentity identity)
+    {
+        return null;
+    }
+
+    default DynamicHiveFunctionInfo getFunction(HiveIdentity identity, String dbName, String functionName)
+    {
+        return null;
+    }
 
     List<String> getTablesWithParameter(HiveIdentity identity, String databaseName, String parameterKey, String parameterValue);
 

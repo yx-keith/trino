@@ -13,9 +13,9 @@
  */
 package io.trino.testing;
 
-import io.trino.metadata.BoundSignature;
-import io.trino.metadata.FunctionMetadata;
-import io.trino.metadata.Signature;
+import io.trino.spi.function.BoundSignature;
+import io.trino.spi.function.FunctionMetadata;
+import io.trino.spi.function.Signature;
 import io.trino.metadata.SqlScalarFunction;
 import io.trino.operator.scalar.ChoicesScalarFunctionImplementation;
 import io.trino.operator.scalar.ScalarFunctionImplementation;

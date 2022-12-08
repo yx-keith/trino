@@ -17,6 +17,7 @@ import io.trino.spi.block.BlockEncoding;
 import io.trino.spi.connector.ConnectorFactory;
 import io.trino.spi.eventlistener.EventListenerFactory;
 import io.trino.spi.exchange.ExchangeManagerFactory;
+import io.trino.spi.function.FunctionNamespaceManagerFactory;
 import io.trino.spi.resourcegroups.ResourceGroupConfigurationManagerFactory;
 import io.trino.spi.security.CertificateAuthenticatorFactory;
 import io.trino.spi.security.GroupProviderFactory;
@@ -27,7 +28,6 @@ import io.trino.spi.session.SessionPropertyConfigurationManagerFactory;
 import io.trino.spi.type.ParametricType;
 import io.trino.spi.type.Type;
 
-import java.io.File;
 import java.util.Set;
 
 import static java.util.Collections.emptyList;
@@ -105,12 +105,17 @@ public interface Plugin
         return emptyList();
     }
 
+    default Iterable<FunctionNamespaceManagerFactory> getFunctionNamespaceManagerFactories()
+    {
+        return emptyList();
+    }
+
     default Set<Object> getHiveUdfFunctions()
     {
         return emptySet();
     }
 
-    default void initHiveUdf(File functionDir, String propFilePath)
+    default void initHiveFunction(String functionDir, String propFilePath)
             throws Exception
     {}
 

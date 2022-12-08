@@ -365,7 +365,8 @@ public class LocalQueryRunner
                 new DisabledSystemSecurityMetadata(),
                 transactionManager,
                 globalFunctionCatalog,
-                typeManager);
+                typeManager,
+                new FeaturesConfig());
         globalFunctionCatalog.addFunctions(new InternalFunctionBundle(
                 new JsonExistsFunction(functionManager, metadata, typeManager),
                 new JsonValueFunction(functionManager, metadata, typeManager),
@@ -1173,7 +1174,8 @@ public class LocalQueryRunner
                 SystemSecurityMetadata systemSecurityMetadata,
                 TransactionManager transactionManager,
                 GlobalFunctionCatalog globalFunctionCatalog,
-                TypeManager typeManager);
+                TypeManager typeManager,
+                FeaturesConfig config);
     }
 
     public static class Builder

@@ -14,6 +14,7 @@
 package io.trino.plugin.hive.metastore.thrift;
 
 import io.trino.plugin.hive.acid.AcidOperation;
+import io.trino.spi.function.DynamicHiveFunctionInfo;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.EnvironmentContext;
@@ -50,6 +51,19 @@ public interface ThriftMetastoreClient
 
     List<String> getAllTables(String databaseName)
             throws TException;
+
+    default List<DynamicHiveFunctionInfo> getAllFunctions()
+            throws TException
+    {
+        return null;
+    }
+
+    default DynamicHiveFunctionInfo getFunction(String dbName, String functionName)
+            throws TException
+    {
+        return null;
+    }
+
 
     List<String> getTableNamesByFilter(String databaseName, String filter)
             throws TException;

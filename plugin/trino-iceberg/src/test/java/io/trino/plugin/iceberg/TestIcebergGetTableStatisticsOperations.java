@@ -59,8 +59,8 @@ public class TestIcebergGetTableStatisticsOperations
             throws Exception
     {
         localQueryRunner = LocalQueryRunner.builder(testSessionBuilder().build())
-                .withMetadataProvider((systemSecurityMetadata, transactionManager, globalFunctionCatalog, typeManager)
-                        -> new CountingAccessMetadata(new MetadataManager(systemSecurityMetadata, transactionManager, globalFunctionCatalog, typeManager)))
+                .withMetadataProvider((systemSecurityMetadata, transactionManager, globalFunctionCatalog, typeManager, config)
+                        -> new CountingAccessMetadata(new MetadataManager(systemSecurityMetadata, transactionManager, globalFunctionCatalog, typeManager, null)))
                 .build();
         metadata = (CountingAccessMetadata) localQueryRunner.getMetadata();
         localQueryRunner.installPlugin(new TpchPlugin());

@@ -20,7 +20,7 @@ import io.trino.connector.CatalogName;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.*;
 import io.trino.spi.expression.ConnectorExpression;
-import io.trino.spi.function.OperatorType;
+import io.trino.spi.function.*;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.GrantInfo;
 import io.trino.spi.security.Identity;
@@ -602,7 +602,8 @@ public interface Metadata
      * because overloads between aggregation and other function types are not allowed.
      */
     boolean isAggregationFunction(Session session, QualifiedName name);
-
+    default void addFunction(SqlFunction function)
+    {}
     FunctionMetadata getFunctionMetadata(Session session, ResolvedFunction resolvedFunction);
 
     AggregationFunctionMetadata getAggregationFunctionMetadata(Session session, ResolvedFunction resolvedFunction);
@@ -693,8 +694,29 @@ public interface Metadata
      */
     Optional<TableHandle> getTableHandle(Session session, QualifiedObjectName tableName, Optional<TableVersion> startVersion, Optional<TableVersion> endVersion);
 
-    default boolean copyFileToLocal(String src, String dist, String catalogName)
+    default boolean copyFileToLocal(String src, String dist, String catalogName, boolean distIsFile)
     {
         return false;
+    }
+
+    default List<DynamicHiveFunctionInfo> getAllHiveFunctions(CatalogName catalogName)
+    {
+        return null;
+    }
+
+    default DynamicHiveFunctionInfo getFunction(Session session, HiveFunctionKey key)
+    {
+        return null;
+    }
+
+    default void addFunctionNamespaceFactory(FunctionNamespaceManagerFactory factory)
+    {}
+
+    default void loadFunctionNamespaceManager(String functionNamespaceManagerName, String catalogName, Map<String, String> properties)
+    {}
+
+    default Optional<FunctionNamespaceManager> getServingFunctionNamespaceManager(String catalogName)
+    {
+        return Optional.empty();
     }
 }

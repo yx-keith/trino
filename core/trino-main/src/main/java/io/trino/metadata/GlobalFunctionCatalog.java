@@ -19,8 +19,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import io.trino.operator.aggregation.AggregationMetadata;
 import io.trino.operator.window.WindowFunctionSupplier;
-import io.trino.spi.function.InvocationConvention;
-import io.trino.spi.function.OperatorType;
+import io.trino.spi.function.*;
 import io.trino.spi.type.TypeSignature;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -34,9 +33,9 @@ import java.util.function.Function;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
-import static io.trino.metadata.Signature.isOperatorName;
-import static io.trino.metadata.Signature.unmangleOperator;
 import static io.trino.spi.function.FunctionKind.AGGREGATE;
+import static io.trino.spi.function.Signature.isOperatorName;
+import static io.trino.spi.function.Signature.unmangleOperator;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.IntegerType.INTEGER;
@@ -122,6 +121,11 @@ public class GlobalFunctionCatalog
         if (!GLOBAL_SCHEMA.equals(name.getSchemaName())) {
             return ImmutableList.of();
         }
+        return functions.get(name.getFunctionName());
+    }
+
+    public Collection<FunctionMetadata> getTrinoFunction(SchemaFunctionName name)
+    {
         return functions.get(name.getFunctionName());
     }
 

@@ -19,51 +19,11 @@ import io.trino.plugin.base.util.LoggingInvocationHandler;
 import io.trino.plugin.base.util.LoggingInvocationHandler.AirliftParameterNamesProvider;
 import io.trino.plugin.base.util.LoggingInvocationHandler.ParameterNamesProvider;
 import io.trino.plugin.hive.acid.AcidOperation;
+import io.trino.spi.function.DynamicHiveFunctionInfo;
+import io.trino.spi.function.FunctionId;
 import org.apache.hadoop.hive.common.ValidTxnList;
-import org.apache.hadoop.hive.metastore.api.AbortTxnRequest;
-import org.apache.hadoop.hive.metastore.api.AddDynamicPartitions;
-import org.apache.hadoop.hive.metastore.api.AllocateTableWriteIdsRequest;
-import org.apache.hadoop.hive.metastore.api.AllocateTableWriteIdsResponse;
-import org.apache.hadoop.hive.metastore.api.AlterPartitionsRequest;
-import org.apache.hadoop.hive.metastore.api.AlterTableRequest;
-import org.apache.hadoop.hive.metastore.api.CheckLockRequest;
-import org.apache.hadoop.hive.metastore.api.ClientCapabilities;
-import org.apache.hadoop.hive.metastore.api.ClientCapability;
-import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
-import org.apache.hadoop.hive.metastore.api.ColumnStatisticsDesc;
-import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
-import org.apache.hadoop.hive.metastore.api.CommitTxnRequest;
-import org.apache.hadoop.hive.metastore.api.Database;
-import org.apache.hadoop.hive.metastore.api.EnvironmentContext;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.GetPrincipalsInRoleRequest;
-import org.apache.hadoop.hive.metastore.api.GetPrincipalsInRoleResponse;
-import org.apache.hadoop.hive.metastore.api.GetRoleGrantsForPrincipalRequest;
-import org.apache.hadoop.hive.metastore.api.GetRoleGrantsForPrincipalResponse;
-import org.apache.hadoop.hive.metastore.api.GetTableRequest;
-import org.apache.hadoop.hive.metastore.api.GetValidWriteIdsRequest;
-import org.apache.hadoop.hive.metastore.api.GrantRevokePrivilegeRequest;
-import org.apache.hadoop.hive.metastore.api.GrantRevokeRoleRequest;
-import org.apache.hadoop.hive.metastore.api.GrantRevokeRoleResponse;
-import org.apache.hadoop.hive.metastore.api.GrantRevokeType;
-import org.apache.hadoop.hive.metastore.api.HeartbeatTxnRangeRequest;
-import org.apache.hadoop.hive.metastore.api.HiveObjectPrivilege;
-import org.apache.hadoop.hive.metastore.api.HiveObjectRef;
-import org.apache.hadoop.hive.metastore.api.LockRequest;
-import org.apache.hadoop.hive.metastore.api.LockResponse;
-import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.metastore.api.OpenTxnRequest;
-import org.apache.hadoop.hive.metastore.api.Partition;
-import org.apache.hadoop.hive.metastore.api.PartitionsStatsRequest;
-import org.apache.hadoop.hive.metastore.api.PrincipalType;
-import org.apache.hadoop.hive.metastore.api.PrivilegeBag;
-import org.apache.hadoop.hive.metastore.api.Role;
-import org.apache.hadoop.hive.metastore.api.RolePrincipalGrant;
-import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.hadoop.hive.metastore.api.TableStatsRequest;
+import org.apache.hadoop.hive.metastore.api.*;
 import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore;
-import org.apache.hadoop.hive.metastore.api.TxnToWriteId;
-import org.apache.hadoop.hive.metastore.api.UnlockRequest;
 import org.apache.hadoop.hive.metastore.txn.TxnUtils;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -132,6 +92,28 @@ public class ThriftHiveMetastoreClient
             throws TException
     {
         return client.get_all_tables(databaseName);
+    }
+
+    @Override
+    public List<DynamicHiveFunctionInfo> getAllFunctions()
+            throws TException
+    {
+        List<DynamicHiveFunctionInfo> list = new ArrayList<>();
+        GetAllFunctionsResponse functionsResp = client.get_all_functions();
+        functionsResp.getFunctions().forEach(function -> {
+            DynamicHiveFunctionInfo functionInfo = new DynamicHiveFunctionInfo(function.getFunctionName(), function.getClassName(), function.getResourceUris().get(0).getUri(), function.getCreateTime());
+            list.add(functionInfo);
+        });
+        return list;
+    }
+
+    @Override
+    public DynamicHiveFunctionInfo getFunction(String dbName, String functionName)
+            throws TException
+    {
+        Function function = client.get_function(dbName, functionName);
+        DynamicHiveFunctionInfo functionInfo = new DynamicHiveFunctionInfo(function.getFunctionName(), function.getClassName(), function.getResourceUris().get(0).getUri(), function.getCreateTime());
+        return functionInfo;
     }
 
     @Override

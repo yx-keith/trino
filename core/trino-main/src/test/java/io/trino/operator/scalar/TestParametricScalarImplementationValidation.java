@@ -14,7 +14,7 @@
 package io.trino.operator.scalar;
 
 import com.google.common.collect.ImmutableList;
-import io.trino.metadata.BoundSignature;
+import io.trino.spi.function.BoundSignature;
 import io.trino.spi.connector.ConnectorSession;
 import org.testng.annotations.Test;
 

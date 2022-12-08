@@ -32,52 +32,10 @@ import io.trino.metadata.Catalog.SecurityManagement;
 import io.trino.metadata.ResolvedFunction.ResolvedFunctionDecoder;
 import io.trino.spi.QueryId;
 import io.trino.spi.TrinoException;
-import io.trino.spi.connector.AggregateFunction;
-import io.trino.spi.connector.AggregationApplicationResult;
-import io.trino.spi.connector.Assignment;
-import io.trino.spi.connector.BeginTableExecuteResult;
-import io.trino.spi.connector.CatalogSchemaName;
-import io.trino.spi.connector.CatalogSchemaTableName;
-import io.trino.spi.connector.ColumnHandle;
-import io.trino.spi.connector.ColumnMetadata;
-import io.trino.spi.connector.ConnectorCapabilities;
-import io.trino.spi.connector.ConnectorInsertTableHandle;
-import io.trino.spi.connector.ConnectorMaterializedViewDefinition;
-import io.trino.spi.connector.ConnectorMetadata;
-import io.trino.spi.connector.ConnectorOutputMetadata;
-import io.trino.spi.connector.ConnectorOutputTableHandle;
-import io.trino.spi.connector.ConnectorPartitioningHandle;
-import io.trino.spi.connector.ConnectorResolvedIndex;
-import io.trino.spi.connector.ConnectorSession;
-import io.trino.spi.connector.ConnectorTableExecuteHandle;
-import io.trino.spi.connector.ConnectorTableHandle;
-import io.trino.spi.connector.ConnectorTableMetadata;
-import io.trino.spi.connector.ConnectorTableSchema;
-import io.trino.spi.connector.ConnectorTableVersion;
-import io.trino.spi.connector.ConnectorTransactionHandle;
-import io.trino.spi.connector.ConnectorViewDefinition;
-import io.trino.spi.connector.Constraint;
-import io.trino.spi.connector.ConstraintApplicationResult;
-import io.trino.spi.connector.JoinApplicationResult;
-import io.trino.spi.connector.JoinCondition;
-import io.trino.spi.connector.JoinStatistics;
-import io.trino.spi.connector.JoinType;
-import io.trino.spi.connector.LimitApplicationResult;
-import io.trino.spi.connector.MaterializedViewFreshness;
-import io.trino.spi.connector.ProjectionApplicationResult;
-import io.trino.spi.connector.SampleApplicationResult;
-import io.trino.spi.connector.SampleType;
-import io.trino.spi.connector.SchemaTableName;
-import io.trino.spi.connector.SchemaTablePrefix;
-import io.trino.spi.connector.SortItem;
-import io.trino.spi.connector.SystemTable;
-import io.trino.spi.connector.TableColumnsMetadata;
-import io.trino.spi.connector.TableFunctionApplicationResult;
-import io.trino.spi.connector.TableScanRedirectApplicationResult;
-import io.trino.spi.connector.TopNApplicationResult;
+import io.trino.spi.connector.*;
 import io.trino.spi.expression.ConnectorExpression;
 import io.trino.spi.expression.Variable;
-import io.trino.spi.function.OperatorType;
+import io.trino.spi.function.*;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.GrantInfo;
 import io.trino.spi.security.Identity;
@@ -135,11 +93,12 @@ import static io.trino.SystemSessionProperties.getRetryPolicy;
 import static io.trino.client.NodeVersion.UNKNOWN;
 import static io.trino.collect.cache.CacheUtils.uncheckedCacheGet;
 import static io.trino.collect.cache.SafeCaches.buildNonEvictableCache;
+import static io.trino.metadata.FunctionResolver.toHivePath;
 import static io.trino.metadata.GlobalFunctionCatalog.GLOBAL_CATALOG;
 import static io.trino.metadata.QualifiedObjectName.convertFromSchemaTableName;
 import static io.trino.metadata.RedirectionAwareTableHandle.noRedirection;
 import static io.trino.metadata.RedirectionAwareTableHandle.withRedirectionTo;
-import static io.trino.metadata.Signature.mangleOperatorName;
+import static io.trino.spi.function.Signature.mangleOperatorName;
 import static io.trino.metadata.SignatureBinder.applyBoundVariables;
 import static io.trino.spi.StandardErrorCode.FUNCTION_IMPLEMENTATION_MISSING;
 import static io.trino.spi.StandardErrorCode.FUNCTION_NOT_FOUND;
@@ -176,13 +135,18 @@ public final class MetadataManager
 
     private final NonEvictableCache<OperatorCacheKey, ResolvedFunction> operatorCache;
     private final NonEvictableCache<CoercionCacheKey, ResolvedFunction> coercionCache;
+    private final Map<String, FunctionNamespaceManagerFactory> functionNamespaceManagerFactorys = new ConcurrentHashMap<>();
+    private final Map<String, FunctionNamespaceManager> functionNamespaceManagers = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> resourceUriMap = new ConcurrentHashMap<>();
+    private FeaturesConfig config;
 
     @Inject
     public MetadataManager(
             SystemSecurityMetadata systemSecurityMetadata,
             TransactionManager transactionManager,
             GlobalFunctionCatalog globalFunctionCatalog,
-            TypeManager typeManager)
+            TypeManager typeManager,
+            FeaturesConfig config)
     {
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
         functions = requireNonNull(globalFunctionCatalog, "globalFunctionCatalog is null");
@@ -190,11 +154,45 @@ public final class MetadataManager
 
         this.systemSecurityMetadata = requireNonNull(systemSecurityMetadata, "systemSecurityMetadata is null");
         this.transactionManager = requireNonNull(transactionManager, "transactionManager is null");
+        this.config = requireNonNull(config, "config is null");
 
         functionDecoder = new ResolvedFunctionDecoder(typeManager::getType);
 
         operatorCache = buildNonEvictableCache(CacheBuilder.newBuilder().maximumSize(1000));
         coercionCache = buildNonEvictableCache(CacheBuilder.newBuilder().maximumSize(1000));
+    }
+
+    @Override
+    public void addFunctionNamespaceFactory(FunctionNamespaceManagerFactory factory)
+    {
+        if(functionNamespaceManagerFactorys.putIfAbsent(factory.getName(), factory) != null) {
+            throw new IllegalArgumentException(format("Function namepace manager factory '%s' is already registered", factory.getName()));
+        }
+    }
+
+    @Override
+    public void loadFunctionNamespaceManager(String functionNamespaceManagerName, String catalogName, Map<String, String> properties)
+    {
+        requireNonNull(functionNamespaceManagerName, "functionNamespaceManagerName is null");
+        FunctionNamespaceManagerFactory factory = functionNamespaceManagerFactorys.get(functionNamespaceManagerName);
+        checkState(factory != null, "No factory for function namespace manager %s", functionNamespaceManagerName);
+        FunctionNamespaceManager functionNamespaceManager = factory.create(catalogName, properties);
+
+        if (functionNamespaceManagers.putIfAbsent(catalogName, functionNamespaceManager) != null) {
+            throw new IllegalArgumentException(format("Function namespace manager is already registered for catalog [%s]", catalogName));
+        }
+
+        //加载所有Hive udf
+        if(config.isBootLoadHiveFunctionEnabled()) {
+            List<DynamicHiveFunctionInfo> dynamicHiveFunctionInfos = ImmutableList.copyOf(getAllHiveFunctions(new CatalogName(catalogName)));
+            for (DynamicHiveFunctionInfo functionInfo : dynamicHiveFunctionInfos) {
+                if(!resourceUriMap.containsKey(functionInfo.getResourceUri()) || !resourceUriMap.get(functionInfo.getResourceUri())) {
+                    resourceUriMap.put(functionInfo.getResourceUri(), copyFileToLocal(functionInfo.getResourceUri(), config.getLocalHiveUdfJarsDir(), catalogName, false));
+                }
+                Optional<SqlFunction> dynamicHiveFunction = functionNamespaceManager.initDynamicHiveFunction(functionInfo, config.getLocalHiveUdfJarsDir());
+                dynamicHiveFunction.ifPresent(this::addFunction);
+            }
+        }
     }
 
     @Override
@@ -530,6 +528,24 @@ public final class MetadataManager
             }
         }
         return ImmutableList.copyOf(tables);
+    }
+
+    @Override
+    public List<DynamicHiveFunctionInfo> getAllHiveFunctions(CatalogName catalogName)
+    {
+        requireNonNull(catalogName, "catalogName is null");
+        CatalogMetadata catalogMetadata = getCatalogMetadataRead(TransactionId.create(), catalogName.toString());
+        ConnectorMetadata metadata = catalogMetadata.getMetadataFor(null, catalogName);
+        return metadata.getAllFunctions();
+    }
+
+    @Override
+    public DynamicHiveFunctionInfo getFunction(Session session, HiveFunctionKey key)
+    {
+        requireNonNull(key.getCatalogName(), "catalogName is null");
+        CatalogMetadata catalogMetadata = getCatalogMetadataRead(TransactionId.create(), key.getCatalogName());
+        ConnectorMetadata metadata = catalogMetadata.getMetadataFor(session, new CatalogName(key.getCatalogName()));
+        return metadata.getFunction(key);
     }
 
     private Optional<Boolean> isExistingRelationForListing(Session session, QualifiedObjectName name)
@@ -2075,8 +2091,29 @@ public final class MetadataManager
 
     private ResolvedFunction resolvedFunctionInternal(Session session, QualifiedName name, List<TypeSignatureProvider> parameterTypes)
     {
+        List<CatalogSchemaFunctionName> names = toHivePath(session, name);
+        for(CatalogSchemaFunctionName catalogSchemaFunctionName : names) {
+            String catalogName = catalogSchemaFunctionName.getCatalogName();
+            SchemaFunctionName schemaFunctionName = catalogSchemaFunctionName.getSchemaFunctionName();
+            String functionName = schemaFunctionName.getFunctionName();
+            if (getTrinoFunction(catalogSchemaFunctionName).isEmpty() && config.isDynamicLoadHiveFunctionEnabled() && !functionName.contains("@")) {
+                //动态加载
+                Optional<FunctionNamespaceManager> servingFunctionNamespaceManager = this.getServingFunctionNamespaceManager(catalogName);
+                if (!servingFunctionNamespaceManager.isPresent()) {
+                    throw new TrinoException(FUNCTION_NOT_FOUND, format("Function '%s' not registered", catalogSchemaFunctionName));
+                }
+                HiveFunctionKey hiveFunctionKey = new HiveFunctionKey(catalogName, schemaFunctionName.getSchemaName(), functionName);
+                DynamicHiveFunctionInfo functionInfo = getFunction(session, hiveFunctionKey);
+                if(!resourceUriMap.containsKey(functionInfo.getResourceUri()) || !resourceUriMap.get(functionInfo.getResourceUri())) {
+                    resourceUriMap.put(functionInfo.getResourceUri(), copyFileToLocal(functionInfo.getResourceUri(), config.getLocalHiveUdfJarsDir(), catalogName, false));
+                }
+                FunctionNamespaceManager functionNamespaceManager = servingFunctionNamespaceManager.get();
+                Optional<SqlFunction> dynamicHiveFunction = functionNamespaceManager.initDynamicHiveFunction(functionInfo, config.getLocalHiveUdfJarsDir());
+                dynamicHiveFunction.ifPresent(this::addFunction);
+            }
+        }
         return functionDecoder.fromQualifiedName(name)
-                .orElseGet(() -> resolve(session, functionResolver.resolveFunction(session, name, parameterTypes, this::getFunctions)));
+                .orElseGet(() -> resolve(session, functionResolver.resolveFunction(session, name, parameterTypes, this::getTrinoFunction)));
     }
 
     @Override
@@ -2212,6 +2249,20 @@ public final class MetadataManager
             return functions.getFunctions(name.getSchemaFunctionName());
         }
         return ImmutableList.of();
+    }
+
+    protected Collection<FunctionMetadata> getTrinoFunction(CatalogSchemaFunctionName name)
+    {
+        return functions.getTrinoFunction(name.getSchemaFunctionName());
+    }
+
+    @Override
+    public void addFunction(SqlFunction function)
+    {
+        InternalFunctionBundle.InternalFunctionBundleBuilder builder = InternalFunctionBundle.builder();
+        builder.function(function);
+        FunctionBundle functionBundle = builder.build();
+        functions.addFunctions(functionBundle);
     }
 
     @Override
@@ -2368,11 +2419,18 @@ public final class MetadataManager
         return ImmutableSet.copyOf(catalogsByQueryId.keySet());
     }
 
-    public boolean copyFileToLocal(String src, String dist, String catalogName)
+    @Override
+    public boolean copyFileToLocal(String src, String dist, String catalogName, boolean distIsFile)
     {
         CatalogMetadata catalogMetadata = getCatalogMetadataRead(TransactionId.create(), catalogName);
         ConnectorMetadata metadata = catalogMetadata.getMetadataFor(null, new CatalogName(catalogName));
-        return metadata.copyFileToLocal(src, dist);
+        return metadata.copyFileToLocal(src, dist, distIsFile);
+    }
+
+    @Override
+    public Optional<FunctionNamespaceManager> getServingFunctionNamespaceManager(String catalogName)
+    {
+        return Optional.ofNullable(functionNamespaceManagers.get(catalogName));
     }
 
     private static class QueryCatalogs
@@ -2606,7 +2664,8 @@ public final class MetadataManager
                     new DisabledSystemSecurityMetadata(),
                     transactionManager,
                     globalFunctionCatalog,
-                    typeManager);
+                    typeManager,
+                    new FeaturesConfig());
         }
     }
 }

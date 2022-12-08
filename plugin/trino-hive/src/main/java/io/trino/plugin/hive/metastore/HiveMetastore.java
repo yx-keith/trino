@@ -20,7 +20,9 @@ import io.trino.plugin.hive.PartitionStatistics;
 import io.trino.plugin.hive.acid.AcidOperation;
 import io.trino.plugin.hive.acid.AcidTransaction;
 import io.trino.plugin.hive.metastore.HivePrivilegeInfo.HivePrivilege;
+import io.trino.spi.function.DynamicHiveFunctionInfo;
 import io.trino.spi.connector.SchemaTableName;
+import io.trino.spi.function.HiveFunctionKey;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.RoleGrant;
 import io.trino.spi.statistics.ColumnStatisticType;
@@ -58,6 +60,16 @@ public interface HiveMetastore
     void updatePartitionStatistics(Table table, Map<String, Function<PartitionStatistics, PartitionStatistics>> updates);
 
     List<String> getAllTables(String databaseName);
+
+    default List<DynamicHiveFunctionInfo> getAllFunctions()
+    {
+        return null;
+    }
+
+    default DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    {
+        return null;
+    }
 
     List<String> getTablesWithParameter(String databaseName, String parameterKey, String parameterValue);
 

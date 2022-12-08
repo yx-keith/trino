@@ -17,7 +17,7 @@ import com.google.common.collect.ImmutableList;
 import io.trino.annotation.UsedByGeneratedCode;
 import io.trino.metadata.PolymorphicScalarFunctionBuilder;
 import io.trino.metadata.PolymorphicScalarFunctionBuilder.SpecializeContext;
-import io.trino.metadata.Signature;
+import io.trino.spi.function.Signature;
 import io.trino.metadata.SqlScalarFunction;
 import io.trino.spi.TrinoException;
 import io.trino.spi.function.LiteralParameters;

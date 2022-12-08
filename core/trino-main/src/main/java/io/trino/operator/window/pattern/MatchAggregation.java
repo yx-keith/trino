@@ -15,7 +15,7 @@ package io.trino.operator.window.pattern;
 
 import io.trino.memory.context.AggregatedMemoryContext;
 import io.trino.memory.context.LocalMemoryContext;
-import io.trino.metadata.BoundSignature;
+import io.trino.spi.function.BoundSignature;
 import io.trino.operator.aggregation.WindowAccumulator;
 import io.trino.operator.window.AggregationWindowFunctionSupplier;
 import io.trino.operator.window.MappedWindowIndex;

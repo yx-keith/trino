@@ -15,13 +15,10 @@ package io.trino.operator.scalar;
 
 import com.google.common.collect.ImmutableList;
 import io.trino.jmh.Benchmarks;
-import io.trino.metadata.BoundSignature;
-import io.trino.metadata.FunctionMetadata;
-import io.trino.metadata.InternalFunctionBundle;
-import io.trino.metadata.ResolvedFunction;
-import io.trino.metadata.Signature;
-import io.trino.metadata.SqlScalarFunction;
-import io.trino.metadata.TestingFunctionResolution;
+import io.trino.metadata.*;
+import io.trino.spi.function.BoundSignature;
+import io.trino.spi.function.FunctionMetadata;
+import io.trino.spi.function.Signature;
 import io.trino.operator.DriverYieldSignal;
 import io.trino.operator.project.PageProcessor;
 import io.trino.spi.Page;

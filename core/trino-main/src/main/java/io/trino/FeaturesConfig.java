@@ -104,6 +104,18 @@ public class FeaturesConfig
 
     private boolean hideInaccessibleColumns;
 
+    private String localHiveUdfJarsDir = "hive-udf/jars";
+    private String remoteHiveUdfPropsPath = "hdfs://localhost:8020/user/hive/udf/props/udf.properties";
+    private String  remoteHiveUdfJarsPath = "hdfs://localhost:8020/user/hive/udf/jars";
+
+    private boolean loadHiveFunctionInPluginManager;
+    private boolean bootLoadHiveFunctionEnabled;
+    private boolean dynamicLoadHiveFunctionEnabled;
+    private boolean isLoadHiveUdfFromHdfs;
+    private boolean maxFunctionRunningTimeEnable;
+    private long maxFunctionRunningTimeInSec = 600;
+    private int functionRunningThreadPoolSize = 100;
+
     public enum DataIntegrityVerification
     {
         NONE,
@@ -519,6 +531,126 @@ public class FeaturesConfig
     public FeaturesConfig setAllowSetViewAuthorization(boolean allowSetViewAuthorization)
     {
         this.allowSetViewAuthorization = allowSetViewAuthorization;
+        return this;
+    }
+
+    public boolean isLoadHiveFunctionInPluginManager()
+    {
+        return loadHiveFunctionInPluginManager;
+    }
+
+    @Config("load-hive-function-in-pluginmanager.enabled")
+    public FeaturesConfig setLoadHiveFunctionInPluginManager(boolean loadHiveFunctionInPluginManager)
+    {
+        this.loadHiveFunctionInPluginManager = loadHiveFunctionInPluginManager;
+        return this;
+    }
+
+    public boolean isBootLoadHiveFunctionEnabled()
+    {
+        return bootLoadHiveFunctionEnabled;
+    }
+
+    @Config("boot-load-hive-udf.enabled")
+    public FeaturesConfig setBootLoadHiveFunctionEnabled(boolean bootLoadHiveFunctionEnabled)
+    {
+        this.bootLoadHiveFunctionEnabled = bootLoadHiveFunctionEnabled;
+        return this;
+    }
+
+    public boolean isDynamicLoadHiveFunctionEnabled()
+    {
+        return dynamicLoadHiveFunctionEnabled;
+    }
+
+    @Config("dynamic-load-hive-udf.enabled")
+    public FeaturesConfig setDynamicLoadHiveFunctionEnabled(boolean dynamicLoadHiveFunctionEnabled)
+    {
+        this.dynamicLoadHiveFunctionEnabled = dynamicLoadHiveFunctionEnabled;
+        return this;
+    }
+
+    public String getLocalHiveUdfJarsDir()
+    {
+        return localHiveUdfJarsDir;
+    }
+
+    @Config("local-hive-udf.dir")
+    public FeaturesConfig setLocalHiveUdfJarsDir(String localHiveUdfJarsDir)
+    {
+        this.localHiveUdfJarsDir = localHiveUdfJarsDir;
+        return this;
+    }
+
+    public String getRemoteHiveUdfPropsPath()
+    {
+        return this.remoteHiveUdfPropsPath;
+    }
+
+    @Config("remote-hive-udf-props.path")
+    public FeaturesConfig setRemoteHiveUdfPropsPath(String remoteHiveUdfPropsPath)
+    {
+        this.remoteHiveUdfPropsPath = remoteHiveUdfPropsPath;
+        return this;
+    }
+
+    public String getRemoteHiveUdfJarsPath()
+    {
+        return this.remoteHiveUdfJarsPath;
+    }
+
+    @Config("remote-hive-udf-jars.path")
+    public FeaturesConfig setRemoteHiveUdfJarsPath(String remoteHiveUdfJarsPath)
+    {
+        this.remoteHiveUdfJarsPath = remoteHiveUdfJarsPath;
+        return this;
+    }
+
+    public boolean isLoadHiveUdfFromHdfs()
+    {
+        return isLoadHiveUdfFromHdfs;
+    }
+
+    @Config("load-hive-udf.from-hdfs")
+    public FeaturesConfig setLoadHiveUdfFromHdfs(boolean loadHiveUdfFromHdfs)
+    {
+        isLoadHiveUdfFromHdfs = loadHiveUdfFromHdfs;
+        return this;
+    }
+
+    public boolean getMaxFunctionRunningTimeEnable()
+    {
+        return this.maxFunctionRunningTimeEnable;
+    }
+
+    @Config("max-function-running-time-enable")
+    public FeaturesConfig setMaxFunctionRunningTimeEnable(boolean maxFunctionRunningTimeEnable)
+    {
+        this.maxFunctionRunningTimeEnable = maxFunctionRunningTimeEnable;
+        return this;
+    }
+
+    public long getMaxFunctionRunningTimeInSec()
+    {
+        return this.maxFunctionRunningTimeInSec;
+    }
+
+    @Config("max-function-running-time-in-second")
+    public FeaturesConfig setMaxFunctionRunningTimeInSec(long time)
+    {
+        this.maxFunctionRunningTimeInSec = time;
+        return this;
+    }
+
+    public int getFunctionRunningThreadPoolSize()
+    {
+        return this.functionRunningThreadPoolSize;
+    }
+
+    @Config("function-running-thread-pool-size")
+    public FeaturesConfig setFunctionRunningThreadPoolSize(int functionRunningThreadPoolSize)
+    {
+        this.functionRunningThreadPoolSize = functionRunningThreadPoolSize;
         return this;
     }
 }

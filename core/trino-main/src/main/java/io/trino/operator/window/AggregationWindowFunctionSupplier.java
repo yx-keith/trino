@@ -13,8 +13,8 @@
  */
 package io.trino.operator.window;
 
-import io.trino.metadata.BoundSignature;
-import io.trino.metadata.FunctionNullability;
+import io.trino.spi.function.BoundSignature;
+import io.trino.spi.function.FunctionNullability;
 import io.trino.operator.aggregation.AggregationMetadata;
 import io.trino.operator.aggregation.WindowAccumulator;
 import io.trino.spi.function.WindowFunction;

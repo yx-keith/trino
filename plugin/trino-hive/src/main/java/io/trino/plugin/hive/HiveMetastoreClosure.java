@@ -26,8 +26,10 @@ import io.trino.plugin.hive.metastore.Partition;
 import io.trino.plugin.hive.metastore.PartitionWithStatistics;
 import io.trino.plugin.hive.metastore.PrincipalPrivileges;
 import io.trino.plugin.hive.metastore.Table;
+import io.trino.spi.function.DynamicHiveFunctionInfo;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
+import io.trino.spi.function.HiveFunctionKey;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.RoleGrant;
 import io.trino.spi.statistics.ColumnStatisticType;
@@ -124,6 +126,16 @@ public class HiveMetastoreClosure
     public List<String> getAllTables(String databaseName)
     {
         return delegate.getAllTables(databaseName);
+    }
+
+    public List<DynamicHiveFunctionInfo> getAllFunctions()
+    {
+        return delegate.getAllFunctions();
+    }
+
+    public DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    {
+        return delegate.getFunction(key);
     }
 
     public List<String> getTablesWithParameter(String databaseName, String parameterKey, String parameterValue)

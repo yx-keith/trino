@@ -21,6 +21,8 @@ import io.trino.metadata.PolymorphicScalarFunctionBuilder.SpecializeContext;
 import io.trino.operator.scalar.ChoicesScalarFunctionImplementation;
 import io.trino.operator.scalar.ChoicesScalarFunctionImplementation.ScalarImplementationChoice;
 import io.trino.operator.scalar.ScalarFunctionImplementation;
+import io.trino.spi.function.BoundSignature;
+import io.trino.spi.function.FunctionMetadata;
 import io.trino.spi.function.InvocationConvention.InvocationArgumentConvention;
 import io.trino.spi.function.InvocationConvention.InvocationReturnConvention;
 import io.trino.spi.type.Type;

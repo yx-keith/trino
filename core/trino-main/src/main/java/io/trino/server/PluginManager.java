@@ -15,6 +15,7 @@ package io.trino.server;
 
 import com.google.common.collect.ImmutableList;
 import io.airlift.log.Logger;
+import io.trino.FeaturesConfig;
 import io.trino.connector.CatalogName;
 import io.trino.connector.ConnectorManager;
 import io.trino.eventlistener.EventListenerManager;
@@ -33,6 +34,8 @@ import io.trino.spi.classloader.ThreadContextClassLoader;
 import io.trino.spi.connector.ConnectorFactory;
 import io.trino.spi.eventlistener.EventListenerFactory;
 import io.trino.spi.exchange.ExchangeManagerFactory;
+import io.trino.spi.function.FunctionNamespaceManagerFactory;
+import io.trino.spi.function.SqlFunction;
 import io.trino.spi.resourcegroups.ResourceGroupConfigurationManagerFactory;
 import io.trino.spi.security.CertificateAuthenticatorFactory;
 import io.trino.spi.security.GroupProviderFactory;
@@ -71,7 +74,7 @@ public class PluginManager
             .build();
 
     private static final Logger log = Logger.get(PluginManager.class);
-    private static final String HIVE_UDF_PLUGIN = "io.trino.plugin.hive.HiveUdfPlugin";
+    private static final String HIVE_FUNCTION_NAMESPACE_PLUGIN = "io.trino.plugin.hive.HiveFunctionPlugin";
     private static final String HIVE_PLUGIN = "io.trino.plugin.hive.HivePlugin";
     private static final String UDF_PROPS_FILE_PATH = format("etc%sudf.properties", File.separatorChar);
     private final PluginsProvider pluginsProvider;
@@ -90,10 +93,10 @@ public class PluginManager
     private final BlockEncodingManager blockEncodingManager;
     private final HandleResolver handleResolver;
     private final AtomicBoolean pluginsLoading = new AtomicBoolean();
-    private final ServerPluginsProviderConfig config;
+    private final FeaturesConfig config;
     private final StaticCatalogStore staticCatalogStore;
     private String pluginName;
-    private final MetadataManager metadataManager;
+    private final Metadata metadata;
     @Inject
     public PluginManager(
             PluginsProvider pluginsProvider,
@@ -111,9 +114,9 @@ public class PluginManager
             BlockEncodingManager blockEncodingManager,
             HandleResolver handleResolver,
             ExchangeManagerRegistry exchangeManagerRegistry,
-            ServerPluginsProviderConfig serverPluginsProviderConfig,
+            FeaturesConfig featuresConfig,
             StaticCatalogStore staticCatalogStore,
-            MetadataManager metadataManager)
+            Metadata metadata)
     {
         this.pluginsProvider = requireNonNull(pluginsProvider, "pluginsProvider is null");
         this.connectorManager = requireNonNull(connectorManager, "connectorManager is null");
@@ -130,9 +133,9 @@ public class PluginManager
         this.blockEncodingManager = requireNonNull(blockEncodingManager, "blockEncodingManager is null");
         this.handleResolver = requireNonNull(handleResolver, "handleResolver is null");
         this.exchangeManagerRegistry = requireNonNull(exchangeManagerRegistry, "exchangeManagerRegistry is null");
-        this.config = requireNonNull(serverPluginsProviderConfig, "serverPluginsProviderConfig is null");
+        this.config = requireNonNull(featuresConfig, "featuresConfig is null");
         this.staticCatalogStore = requireNonNull(staticCatalogStore, "staticCatalogStore is null");
-        this.metadataManager = requireNonNull(metadataManager, "metadataManager is null");
+        this.metadata = requireNonNull(metadata, "metadata is null");
     }
 
     public void loadPlugins()
@@ -165,11 +168,11 @@ public class PluginManager
 
         log.info("-- Finished loading plugin %s --", plugin);
 
-        if (HIVE_PLUGIN.equals(pluginName)) {
+        if (HIVE_PLUGIN.equals(pluginName) && config.isLoadHiveFunctionInPluginManager()) {
             staticCatalogStore.loadCatalogs("hive");
             if (config.isLoadHiveUdfFromHdfs()) {
-                metadataManager.copyFileToLocal(config.getRemoteHiveUdfPropsPath(), UDF_PROPS_FILE_PATH, "hive", true);
-                metadataManager.copyFileToLocal(config.getRemoteHiveUdfJarsPath(), config.getLocalHiveUdfJarsPath().toString(), "hive", false);
+                metadata.copyFileToLocal(config.getRemoteHiveUdfPropsPath(), UDF_PROPS_FILE_PATH, "hive", true);
+                metadata.copyFileToLocal(config.getRemoteHiveUdfJarsPath(), config.getLocalHiveUdfJarsDir(), "hive", false);
             }
         }
     }
@@ -185,8 +188,8 @@ public class PluginManager
             pluginName = plugin.getClass().getName();
             log.info("Installing %s", pluginName);
 
-            if (HIVE_UDF_PLUGIN.equals(pluginName)) {
-                plugin.initHiveUdf(config.getLocalHiveUdfJarsPath(), UDF_PROPS_FILE_PATH);
+            if (HIVE_FUNCTION_NAMESPACE_PLUGIN.equals(pluginName) && config.isLoadHiveFunctionInPluginManager()) {
+                plugin.initHiveFunction(config.getLocalHiveUdfJarsDir(), UDF_PROPS_FILE_PATH);
                 plugin.setMaxFunctionRunningTimeEnable(config.getMaxFunctionRunningTimeEnable());
                 plugin.setMaxFunctionRunningTimeInSec(config.getMaxFunctionRunningTimeInSec());
                 plugin.setFunctionRunningThreadPoolSize(config.getFunctionRunningThreadPoolSize());
@@ -237,6 +240,11 @@ public class PluginManager
             InternalFunctionBundleBuilder builder = InternalFunctionBundle.builder();
             hiveUdfs.forEach(udf -> builder.function((SqlFunction) udf));
             globalFunctionCatalog.addFunctions(builder.build());
+        }
+
+        for (FunctionNamespaceManagerFactory functionNamespaceManagerFactory : plugin.getFunctionNamespaceManagerFactories()) {
+            log.info("Registering function namespace manager %s", functionNamespaceManagerFactory.getName());
+            metadata.addFunctionNamespaceFactory(functionNamespaceManagerFactory);
         }
 
         for (SessionPropertyConfigurationManagerFactory sessionConfigFactory : plugin.getSessionPropertyConfigurationManagerFactories()) {

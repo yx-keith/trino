@@ -15,7 +15,7 @@ package io.trino.metadata;
 
 import io.trino.operator.aggregation.AggregationMetadata;
 import io.trino.operator.window.WindowFunctionSupplier;
-import io.trino.spi.function.InvocationConvention;
+import io.trino.spi.function.*;
 
 import java.util.Collection;
 

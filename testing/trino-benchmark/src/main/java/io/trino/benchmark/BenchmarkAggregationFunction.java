@@ -14,7 +14,7 @@
 package io.trino.benchmark;
 
 import com.google.common.collect.ImmutableList;
-import io.trino.metadata.BoundSignature;
+import io.trino.spi.function.BoundSignature;
 import io.trino.metadata.ResolvedFunction;
 import io.trino.operator.aggregation.AccumulatorFactory;
 import io.trino.operator.aggregation.AggregationMetadata;

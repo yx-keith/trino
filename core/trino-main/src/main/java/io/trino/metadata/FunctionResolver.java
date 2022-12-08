@@ -16,8 +16,11 @@ package io.trino.metadata;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
+import io.trino.FeaturesConfig;
 import io.trino.Session;
+import io.trino.connector.CatalogName;
 import io.trino.spi.TrinoException;
+import io.trino.spi.function.*;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeManager;
 import io.trino.sql.SqlPathElement;
@@ -121,7 +124,7 @@ public class FunctionResolver
                 boundSignature);
     }
 
-    private static boolean possibleExactCastMatch(Signature signature, Signature declaredSignature)
+    private static boolean possibleExactCastMatch(io.trino.spi.function.Signature signature, io.trino.spi.function.Signature declaredSignature)
     {
         if (!declaredSignature.getTypeVariableConstraints().isEmpty()) {
             return false;
@@ -214,6 +217,28 @@ public class FunctionResolver
                     .orElseThrow(() -> new IllegalArgumentException("Session default catalog must be set to resolve a partial function name: " + name));
             names.add(new CatalogSchemaFunctionName(catalog, sqlPathElement.getSchema().getCanonicalValue(), functionName));
         }
+        return names.build();
+    }
+
+    public static List<CatalogSchemaFunctionName> toHivePath(Session session, QualifiedName name)
+    {
+        List<String> parts = name.getParts();
+        checkArgument(parts.size() <= 3, "Function name can only have 3 parts: " + name);
+        if (parts.size() == 3) {
+            return ImmutableList.of(new CatalogSchemaFunctionName(parts.get(0), parts.get(1), parts.get(2)));
+        }
+
+        String currentCatalog = session.getCatalog()
+                .orElseThrow(() -> new IllegalArgumentException("Session default catalog must be set to resolve a partial function name: " + name));
+        if (parts.size() == 2) {
+            return ImmutableList.of(new CatalogSchemaFunctionName(currentCatalog, parts.get(0), parts.get(1)));
+        }
+
+        ImmutableList.Builder<CatalogSchemaFunctionName> names = ImmutableList.builder();
+        String functionName = parts.get(0);
+        String currentSchema = session.getSchema().orElse("default");
+        // session namespace
+        names.add(new CatalogSchemaFunctionName(currentCatalog, currentSchema, functionName));
         return names.build();
     }
 
@@ -433,7 +458,7 @@ public class FunctionResolver
             return function;
         }
 
-        public Signature getDeclaredSignature()
+        public io.trino.spi.function.Signature getDeclaredSignature()
         {
             return function.getSignature();
         }

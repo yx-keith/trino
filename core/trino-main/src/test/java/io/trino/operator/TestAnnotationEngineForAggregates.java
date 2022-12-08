@@ -17,16 +17,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.airlift.slice.Slice;
-import io.trino.metadata.AggregationFunctionMetadata;
-import io.trino.metadata.BoundSignature;
-import io.trino.metadata.FunctionBinding;
-import io.trino.metadata.FunctionDependencies;
-import io.trino.metadata.FunctionManager;
-import io.trino.metadata.FunctionMetadata;
-import io.trino.metadata.MetadataManager;
-import io.trino.metadata.ResolvedFunction;
-import io.trino.metadata.Signature;
-import io.trino.metadata.SqlAggregationFunction;
+import io.trino.metadata.*;
+import io.trino.spi.function.*;
 import io.trino.operator.aggregation.AggregationImplementation;
 import io.trino.operator.aggregation.ParametricAggregation;
 import io.trino.operator.aggregation.state.LongState;
@@ -39,21 +31,6 @@ import io.trino.operator.annotations.OperatorImplementationDependency;
 import io.trino.operator.annotations.TypeImplementationDependency;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
-import io.trino.spi.function.AggregationFunction;
-import io.trino.spi.function.AggregationState;
-import io.trino.spi.function.BlockIndex;
-import io.trino.spi.function.BlockPosition;
-import io.trino.spi.function.CombineFunction;
-import io.trino.spi.function.Convention;
-import io.trino.spi.function.Description;
-import io.trino.spi.function.InputFunction;
-import io.trino.spi.function.LiteralParameter;
-import io.trino.spi.function.LiteralParameters;
-import io.trino.spi.function.OperatorDependency;
-import io.trino.spi.function.OutputFunction;
-import io.trino.spi.function.SqlType;
-import io.trino.spi.function.TypeParameter;
-import io.trino.spi.function.TypeParameterSpecialization;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.DoubleType;
 import io.trino.spi.type.StandardTypes;
@@ -651,13 +628,13 @@ public class TestAnnotationEngineForAggregates
     @Test
     public void testMultiOutputAggregationParse()
     {
-        Signature expectedSignature1 = Signature.builder()
+        Signature expectedSignature1Old = Signature.builder()
                 .name("multi_output_aggregate_1")
                 .returnType(DoubleType.DOUBLE)
                 .argumentType(DoubleType.DOUBLE)
                 .build();
 
-        Signature expectedSignature2 = Signature.builder()
+        Signature expectedSignature2Old = Signature.builder()
                 .name("multi_output_aggregate_2")
                 .returnType(DoubleType.DOUBLE)
                 .argumentType(DoubleType.DOUBLE)
@@ -667,11 +644,11 @@ public class TestAnnotationEngineForAggregates
         assertEquals(aggregations.size(), 2);
 
         ParametricAggregation aggregation1 = aggregations.stream().filter(aggregate -> aggregate.getFunctionMetadata().getSignature().getName().equals("multi_output_aggregate_1")).collect(toImmutableList()).get(0);
-        assertEquals(aggregation1.getFunctionMetadata().getSignature(), expectedSignature1);
+        assertEquals(aggregation1.getFunctionMetadata().getSignature(), expectedSignature1Old);
         assertEquals(aggregation1.getFunctionMetadata().getDescription(), "Simple multi output function aggregate specialized description");
 
         ParametricAggregation aggregation2 = aggregations.stream().filter(aggregate -> aggregate.getFunctionMetadata().getSignature().getName().equals("multi_output_aggregate_2")).collect(toImmutableList()).get(0);
-        assertEquals(aggregation2.getFunctionMetadata().getSignature(), expectedSignature2);
+        assertEquals(aggregation2.getFunctionMetadata().getSignature(), expectedSignature2Old);
         assertEquals(aggregation2.getFunctionMetadata().getDescription(), "Simple multi output function aggregate generic description");
 
         ParametricImplementationsGroup<AggregationImplementation> implementations1 = aggregation1.getImplementations();

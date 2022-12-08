@@ -41,10 +41,9 @@ import io.trino.plugin.hive.acid.AcidTransaction;
 import io.trino.plugin.hive.metastore.HivePrivilegeInfo.HivePrivilege;
 import io.trino.plugin.hive.security.SqlStandardAccessControlMetadataMetastore;
 import io.trino.spi.TrinoException;
-import io.trino.spi.connector.ConnectorSession;
-import io.trino.spi.connector.SchemaNotFoundException;
-import io.trino.spi.connector.SchemaTableName;
-import io.trino.spi.connector.TableNotFoundException;
+import io.trino.spi.connector.*;
+import io.trino.spi.function.DynamicHiveFunctionInfo;
+import io.trino.spi.function.HiveFunctionKey;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.PrincipalType;
 import io.trino.spi.security.RoleGrant;
@@ -224,6 +223,18 @@ public class SemiTransactionalHiveMetastore
             throw new UnsupportedOperationException("Listing all tables after adding/dropping/altering tables/views in a transaction is not supported");
         }
         return delegate.getAllTables(databaseName);
+    }
+
+    public synchronized List<DynamicHiveFunctionInfo> getAllFunctions()
+    {
+        checkReadable();
+        return delegate.getAllFunctions();
+    }
+
+    public synchronized DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    {
+        checkReadable();
+        return delegate.getFunction(key);
     }
 
     public synchronized Optional<Table> getTable(String databaseName, String tableName)

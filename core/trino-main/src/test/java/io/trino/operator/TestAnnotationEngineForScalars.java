@@ -17,12 +17,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.airlift.slice.Slice;
-import io.trino.metadata.BoundSignature;
-import io.trino.metadata.FunctionDependencies;
-import io.trino.metadata.FunctionManager;
-import io.trino.metadata.FunctionMetadata;
-import io.trino.metadata.Signature;
-import io.trino.metadata.SqlScalarFunction;
+import io.trino.metadata.*;
+import io.trino.spi.function.*;
 import io.trino.operator.annotations.ImplementationDependency;
 import io.trino.operator.annotations.LiteralImplementationDependency;
 import io.trino.operator.annotations.TypeImplementationDependency;
@@ -31,14 +27,6 @@ import io.trino.operator.scalar.ParametricScalar;
 import io.trino.operator.scalar.annotations.ParametricScalarImplementation.ParametricScalarImplementationChoice;
 import io.trino.operator.scalar.annotations.ScalarFromAnnotationsParser;
 import io.trino.spi.block.Block;
-import io.trino.spi.function.Description;
-import io.trino.spi.function.IsNull;
-import io.trino.spi.function.LiteralParameter;
-import io.trino.spi.function.LiteralParameters;
-import io.trino.spi.function.ScalarFunction;
-import io.trino.spi.function.SqlNullable;
-import io.trino.spi.function.SqlType;
-import io.trino.spi.function.TypeParameter;
 import io.trino.spi.type.StandardTypes;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeSignature;
@@ -288,13 +276,13 @@ public class TestAnnotationEngineForScalars
     @Test
     public void testMultiScalarParse()
     {
-        Signature expectedSignature1 = Signature.builder()
+        Signature expectedSignature1Old = Signature.builder()
                 .name("static_method_scalar_1")
                 .returnType(DOUBLE)
                 .argumentType(DOUBLE)
                 .build();
 
-        Signature expectedSignature2 = Signature.builder()
+        Signature expectedSignature2Old = Signature.builder()
                 .name("static_method_scalar_2")
                 .returnType(BIGINT)
                 .argumentType(BIGINT)
@@ -302,20 +290,20 @@ public class TestAnnotationEngineForScalars
 
         List<SqlScalarFunction> functions = ScalarFromAnnotationsParser.parseFunctionDefinitions(MultiScalarFunction.class);
         assertEquals(functions.size(), 2);
-        ParametricScalar scalar1 = (ParametricScalar) functions.stream().filter(function -> function.getFunctionMetadata().getSignature().equals(expectedSignature1)).collect(toImmutableList()).get(0);
-        ParametricScalar scalar2 = (ParametricScalar) functions.stream().filter(function -> function.getFunctionMetadata().getSignature().equals(expectedSignature2)).collect(toImmutableList()).get(0);
+        ParametricScalar scalar1 = (ParametricScalar) functions.stream().filter(function -> function.getFunctionMetadata().getSignature().equals(expectedSignature1Old)).collect(toImmutableList()).get(0);
+        ParametricScalar scalar2 = (ParametricScalar) functions.stream().filter(function -> function.getFunctionMetadata().getSignature().equals(expectedSignature2Old)).collect(toImmutableList()).get(0);
 
         assertImplementationCount(scalar1, 1, 0, 0);
         assertImplementationCount(scalar2, 1, 0, 0);
 
         FunctionMetadata functionMetadata1 = scalar1.getFunctionMetadata();
-        assertEquals(functionMetadata1.getSignature(), expectedSignature1);
+        assertEquals(functionMetadata1.getSignature(), expectedSignature1Old);
         assertTrue(functionMetadata1.isDeterministic());
         assertFalse(functionMetadata1.isHidden());
         assertEquals(functionMetadata1.getDescription(), "Simple scalar with single implementation based on method 1");
 
         FunctionMetadata functionMetadata2 = scalar2.getFunctionMetadata();
-        assertEquals(functionMetadata2.getSignature(), expectedSignature2);
+        assertEquals(functionMetadata2.getSignature(), expectedSignature2Old);
         assertFalse(functionMetadata2.isDeterministic());
         assertTrue(functionMetadata2.isHidden());
         assertEquals(functionMetadata2.getDescription(), "Simple scalar with single implementation based on method 2");

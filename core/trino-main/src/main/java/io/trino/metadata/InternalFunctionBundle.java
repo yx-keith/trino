@@ -24,11 +24,7 @@ import io.trino.operator.window.SqlWindowFunction;
 import io.trino.operator.window.WindowAnnotationsParser;
 import io.trino.operator.window.WindowFunctionSupplier;
 import io.trino.spi.TrinoException;
-import io.trino.spi.function.AggregationFunction;
-import io.trino.spi.function.InvocationConvention;
-import io.trino.spi.function.ScalarFunction;
-import io.trino.spi.function.ScalarOperator;
-import io.trino.spi.function.WindowFunction;
+import io.trino.spi.function.*;
 
 import java.util.ArrayList;
 import java.util.Collection;

@@ -47,6 +47,7 @@ import io.trino.execution.resourcegroups.ResourceGroupManager;
 import io.trino.execution.warnings.WarningCollectorModule;
 import io.trino.metadata.Catalog;
 import io.trino.metadata.CatalogManager;
+import io.trino.metadata.FunctionNamespaceStore;
 import io.trino.metadata.StaticCatalogStore;
 import io.trino.security.AccessControlManager;
 import io.trino.security.AccessControlModule;
@@ -177,6 +178,7 @@ public class Server
                 injector.getInstance(CertificateAuthenticatorManager.class).loadCertificateAuthenticator();
                 injector.getInstance(optionalKey(HeaderAuthenticatorManager.class))
                         .ifPresent(HeaderAuthenticatorManager::loadHeaderAuthenticator);
+                injector.getInstance(FunctionNamespaceStore.class).loadFunctionNamespaceManagers();
 
                 injector.getInstance(optionalKey(OAuth2Client.class)).ifPresent(OAuth2Client::load);
 

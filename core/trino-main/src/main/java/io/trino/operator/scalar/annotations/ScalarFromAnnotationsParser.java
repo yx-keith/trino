@@ -15,7 +15,7 @@ package io.trino.operator.scalar.annotations;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import io.trino.metadata.Signature;
+import io.trino.spi.function.Signature;
 import io.trino.metadata.SqlScalarFunction;
 import io.trino.operator.ParametricImplementationsGroup;
 import io.trino.operator.annotations.FunctionsParserHelper;

@@ -56,44 +56,11 @@ import io.trino.spi.ErrorType;
 import io.trino.spi.StandardErrorCode;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
-import io.trino.spi.connector.Assignment;
-import io.trino.spi.connector.BeginTableExecuteResult;
-import io.trino.spi.connector.CatalogSchemaName;
-import io.trino.spi.connector.CatalogSchemaTableName;
-import io.trino.spi.connector.ColumnHandle;
-import io.trino.spi.connector.ColumnMetadata;
-import io.trino.spi.connector.ConnectorInsertTableHandle;
-import io.trino.spi.connector.ConnectorMaterializedViewDefinition;
-import io.trino.spi.connector.ConnectorOutputMetadata;
-import io.trino.spi.connector.ConnectorOutputTableHandle;
-import io.trino.spi.connector.ConnectorPartitioningHandle;
-import io.trino.spi.connector.ConnectorSession;
-import io.trino.spi.connector.ConnectorTableExecuteHandle;
-import io.trino.spi.connector.ConnectorTableHandle;
-import io.trino.spi.connector.ConnectorTableLayout;
-import io.trino.spi.connector.ConnectorTableMetadata;
-import io.trino.spi.connector.ConnectorTablePartitioning;
-import io.trino.spi.connector.ConnectorTableProperties;
-import io.trino.spi.connector.ConnectorViewDefinition;
-import io.trino.spi.connector.Constraint;
-import io.trino.spi.connector.ConstraintApplicationResult;
-import io.trino.spi.connector.DiscretePredicates;
-import io.trino.spi.connector.LocalProperty;
-import io.trino.spi.connector.MaterializedViewFreshness;
-import io.trino.spi.connector.MetadataProvider;
-import io.trino.spi.connector.ProjectionApplicationResult;
-import io.trino.spi.connector.RetryMode;
-import io.trino.spi.connector.SchemaNotFoundException;
-import io.trino.spi.connector.SchemaTableName;
-import io.trino.spi.connector.SchemaTablePrefix;
-import io.trino.spi.connector.SortingProperty;
-import io.trino.spi.connector.SystemTable;
-import io.trino.spi.connector.TableColumnsMetadata;
-import io.trino.spi.connector.TableNotFoundException;
-import io.trino.spi.connector.TableScanRedirectApplicationResult;
-import io.trino.spi.connector.ViewNotFoundException;
+import io.trino.spi.connector.*;
 import io.trino.spi.expression.ConnectorExpression;
 import io.trino.spi.expression.Variable;
+import io.trino.spi.function.DynamicHiveFunctionInfo;
+import io.trino.spi.function.HiveFunctionKey;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
@@ -719,6 +686,18 @@ public class HiveMetadata
 
         tableNames.addAll(listMaterializedViews(session, optionalSchemaName));
         return tableNames.build();
+    }
+
+    @Override
+    public List<DynamicHiveFunctionInfo> getAllFunctions()
+    {
+        return metastore.getAllFunctions();
+    }
+
+    @Override
+    public DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    {
+        return metastore.getFunction(key);
     }
 
     private List<String> listSchemas(ConnectorSession session, Optional<String> schemaName)
@@ -3633,8 +3612,8 @@ public class HiveMetadata
         return true;
     }
 
-    public boolean copyFileToLocal(String src, String dist)
+    public boolean copyFileToLocal(String src, String dist, boolean distIsFile)
     {
-        return locationService.copyFileToLocal(src, dist);
+        return locationService.copyFileToLocal(src, dist, distIsFile);
     }
 }
