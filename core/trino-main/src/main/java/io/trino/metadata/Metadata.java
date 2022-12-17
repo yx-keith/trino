@@ -602,8 +602,19 @@ public interface Metadata
      * because overloads between aggregation and other function types are not allowed.
      */
     boolean isAggregationFunction(Session session, QualifiedName name);
-    default void addFunction(SqlFunction function)
+
+    default void addHiveFunction(SqlFunction function)
     {}
+
+    default void updateHiveFunction(SqlFunction function)
+    {}
+
+    default void dropHiveFunction(SqlFunction function)
+    {}
+
+    default void updateHiveFunction()
+    {}
+
     FunctionMetadata getFunctionMetadata(Session session, ResolvedFunction resolvedFunction);
 
     AggregationFunctionMetadata getAggregationFunctionMetadata(Session session, ResolvedFunction resolvedFunction);
@@ -704,7 +715,7 @@ public interface Metadata
         return null;
     }
 
-    default DynamicHiveFunctionInfo getFunction(Session session, HiveFunctionKey key)
+    default Optional<DynamicHiveFunctionInfo> getHiveFunction(Session session, HiveFunctionKey key)
     {
         return null;
     }

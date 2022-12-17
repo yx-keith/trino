@@ -22,6 +22,7 @@ import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.UncheckedExecutionException;
+import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
 import io.trino.FeaturesConfig;
 import io.trino.Session;
@@ -76,6 +77,8 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -89,6 +92,7 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.airlift.concurrent.MoreFutures.toListenableFuture;
+import static io.airlift.concurrent.Threads.threadsNamed;
 import static io.trino.SystemSessionProperties.getRetryPolicy;
 import static io.trino.client.NodeVersion.UNKNOWN;
 import static io.trino.collect.cache.CacheUtils.uncheckedCacheGet;
@@ -116,10 +120,12 @@ import static java.util.Collections.nCopies;
 import static java.util.Collections.singletonList;
 import static java.util.Locale.ENGLISH;
 import static java.util.Objects.requireNonNull;
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
 public final class MetadataManager
         implements Metadata
 {
+    private static final Logger log = Logger.get(MetadataManager.class);
     @VisibleForTesting
     public static final int MAX_TABLE_REDIRECTIONS = 10;
 
@@ -139,6 +145,8 @@ public final class MetadataManager
     private final Map<String, FunctionNamespaceManager> functionNamespaceManagers = new ConcurrentHashMap<>();
     private final Map<String, Boolean> resourceUriMap = new ConcurrentHashMap<>();
     private FeaturesConfig config;
+    private final Map<HiveFunctionKey, DynamicHiveFunctionInfo> hiveFunctionCache = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService hiveFunctionUpdateExecutor = newSingleThreadScheduledExecutor(threadsNamed("hive-function-update-%s"));
 
     @Inject
     public MetadataManager(
@@ -160,6 +168,43 @@ public final class MetadataManager
 
         operatorCache = buildNonEvictableCache(CacheBuilder.newBuilder().maximumSize(1000));
         coercionCache = buildNonEvictableCache(CacheBuilder.newBuilder().maximumSize(1000));
+        if(config.isDynamicLoadHiveFunctionEnabled()) {
+            hiveFunctionUpdateExecutor.scheduleWithFixedDelay(() -> updateHiveFunction(), 1, config.getHiveFunctionRefreshInterval(), TimeUnit.MINUTES);
+        }
+    }
+
+    @Override
+    public void updateHiveFunction()
+    {
+        hiveFunctionCache.forEach((hiveFunctionKey, hiveFunctionInfo) -> {
+            Optional<DynamicHiveFunctionInfo> optionalDynamicHiveFunctionInfo = getHiveFunction(null, hiveFunctionKey);
+            if(optionalDynamicHiveFunctionInfo.isPresent()) {
+                DynamicHiveFunctionInfo newHiveFunctionInfo = optionalDynamicHiveFunctionInfo.get();
+                if (newHiveFunctionInfo.getCreateTime() > hiveFunctionInfo.getCreateTime()) {
+                    //update function,这里还得触发一次copy from hdfs
+                    Optional<FunctionNamespaceManager> servingFunctionNamespaceManager = getServingFunctionNamespaceManager(hiveFunctionKey.getCatalogName());
+                    servingFunctionNamespaceManager.ifPresent(functionNamespaceManager -> {
+                        resourceUriMap.put(newHiveFunctionInfo.getResourceUri(), copyFileToLocal(newHiveFunctionInfo.getResourceUri(), config.getLocalHiveUdfJarsDir(), hiveFunctionKey.getCatalogName(), false));
+                        Optional<SqlFunction> dynamicHiveFunction = functionNamespaceManager.initDynamicHiveFunction(newHiveFunctionInfo, config.getLocalHiveUdfJarsDir());
+                        dynamicHiveFunction.ifPresent(this::updateHiveFunction);
+                        hiveFunctionCache.put(hiveFunctionKey, newHiveFunctionInfo);
+                    });
+                    log.info("update hive function %s successful", hiveFunctionKey);
+                }
+            } else {
+                //drop function
+                SqlFunction expireHiveFunction = hiveFunctionInfo.getDynamicHiveFunction();
+                dropHiveFunction(expireHiveFunction);
+                hiveFunctionCache.remove(hiveFunctionKey);
+                log.info("drop hive function %s successful", hiveFunctionKey);
+            }
+
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     @Override
@@ -182,15 +227,33 @@ public final class MetadataManager
             throw new IllegalArgumentException(format("Function namespace manager is already registered for catalog [%s]", catalogName));
         }
 
-        //加载所有Hive udf
+        //load all hive udf when start trino
         if(config.isBootLoadHiveFunctionEnabled()) {
-            List<DynamicHiveFunctionInfo> dynamicHiveFunctionInfos = ImmutableList.copyOf(getAllHiveFunctions(new CatalogName(catalogName)));
+            List<DynamicHiveFunctionInfo> dynamicHiveFunctionInfos = new ArrayList<>();
+            try {
+                dynamicHiveFunctionInfos = ImmutableList.copyOf(getAllHiveFunctions(new CatalogName(catalogName)));
+            } catch (Exception e) {
+                log.error("get hive function error: [%s]", e);
+                e.printStackTrace();
+            }
             for (DynamicHiveFunctionInfo functionInfo : dynamicHiveFunctionInfos) {
                 if(!resourceUriMap.containsKey(functionInfo.getResourceUri()) || !resourceUriMap.get(functionInfo.getResourceUri())) {
-                    resourceUriMap.put(functionInfo.getResourceUri(), copyFileToLocal(functionInfo.getResourceUri(), config.getLocalHiveUdfJarsDir(), catalogName, false));
+                    Boolean isCopySuccess = false;
+                    try {
+                        isCopySuccess = copyFileToLocal(functionInfo.getResourceUri(), config.getLocalHiveUdfJarsDir(), catalogName, false);
+                    } catch (Exception e) {
+                        log.error("copy %s error: [%s]", functionInfo.getResourceUri(), e);
+                        e.printStackTrace();
+                    }
+                    resourceUriMap.put(functionInfo.getResourceUri(), isCopySuccess);
                 }
-                Optional<SqlFunction> dynamicHiveFunction = functionNamespaceManager.initDynamicHiveFunction(functionInfo, config.getLocalHiveUdfJarsDir());
-                dynamicHiveFunction.ifPresent(this::addFunction);
+                Optional<SqlFunction> optionalDynamicHiveFunction = functionNamespaceManager.initDynamicHiveFunction(functionInfo, config.getLocalHiveUdfJarsDir());
+                optionalDynamicHiveFunction.ifPresent(dynamicHiveFunction -> {
+                    addHiveFunction(dynamicHiveFunction);
+                    functionInfo.setDynamicHiveFunction(dynamicHiveFunction);
+                    HiveFunctionKey hiveFunctionKey = new HiveFunctionKey(catalogName, functionInfo.getSchemaName(), functionInfo.getFunctionName());
+                    hiveFunctionCache.putIfAbsent(hiveFunctionKey, functionInfo);
+                });
             }
         }
     }
@@ -540,7 +603,7 @@ public final class MetadataManager
     }
 
     @Override
-    public DynamicHiveFunctionInfo getFunction(Session session, HiveFunctionKey key)
+    public Optional<DynamicHiveFunctionInfo> getHiveFunction(Session session, HiveFunctionKey key)
     {
         requireNonNull(key.getCatalogName(), "catalogName is null");
         CatalogMetadata catalogMetadata = getCatalogMetadataRead(TransactionId.create(), key.getCatalogName());
@@ -2096,24 +2159,33 @@ public final class MetadataManager
             String catalogName = catalogSchemaFunctionName.getCatalogName();
             SchemaFunctionName schemaFunctionName = catalogSchemaFunctionName.getSchemaFunctionName();
             String functionName = schemaFunctionName.getFunctionName();
-            if (getTrinoFunction(catalogSchemaFunctionName).isEmpty() && config.isDynamicLoadHiveFunctionEnabled() && !functionName.contains("@")) {
+            if (getAllTrinoFunction(catalogSchemaFunctionName).isEmpty() && config.isDynamicLoadHiveFunctionEnabled() && !functionName.contains("@")) {
                 //动态加载
                 Optional<FunctionNamespaceManager> servingFunctionNamespaceManager = this.getServingFunctionNamespaceManager(catalogName);
                 if (!servingFunctionNamespaceManager.isPresent()) {
                     throw new TrinoException(FUNCTION_NOT_FOUND, format("Function '%s' not registered", catalogSchemaFunctionName));
                 }
                 HiveFunctionKey hiveFunctionKey = new HiveFunctionKey(catalogName, schemaFunctionName.getSchemaName(), functionName);
-                DynamicHiveFunctionInfo functionInfo = getFunction(session, hiveFunctionKey);
-                if(!resourceUriMap.containsKey(functionInfo.getResourceUri()) || !resourceUriMap.get(functionInfo.getResourceUri())) {
-                    resourceUriMap.put(functionInfo.getResourceUri(), copyFileToLocal(functionInfo.getResourceUri(), config.getLocalHiveUdfJarsDir(), catalogName, false));
+                Optional<DynamicHiveFunctionInfo> optionalFunctionInfo = getHiveFunction(session, hiveFunctionKey);
+                if(optionalFunctionInfo.isPresent()) {
+                    DynamicHiveFunctionInfo functionInfo = optionalFunctionInfo.get();
+                    if(!resourceUriMap.containsKey(functionInfo.getResourceUri()) || !resourceUriMap.get(functionInfo.getResourceUri())) {
+                        resourceUriMap.put(functionInfo.getResourceUri(), copyFileToLocal(functionInfo.getResourceUri(), config.getLocalHiveUdfJarsDir(), catalogName, false));
+                    }
+                    FunctionNamespaceManager functionNamespaceManager = servingFunctionNamespaceManager.get();
+                    Optional<SqlFunction> optionalDynamicHiveFunction = functionNamespaceManager.initDynamicHiveFunction(functionInfo, config.getLocalHiveUdfJarsDir());
+                    optionalDynamicHiveFunction.ifPresent(dynamicHiveFunction -> {
+                        addHiveFunction(dynamicHiveFunction);
+                        functionInfo.setDynamicHiveFunction(dynamicHiveFunction);
+                        hiveFunctionCache.putIfAbsent(hiveFunctionKey, functionInfo);
+                    });
+                } else {
+                    throw new TrinoException(FUNCTION_NOT_FOUND, format("function %s does not exist in hive metastore", catalogSchemaFunctionName));
                 }
-                FunctionNamespaceManager functionNamespaceManager = servingFunctionNamespaceManager.get();
-                Optional<SqlFunction> dynamicHiveFunction = functionNamespaceManager.initDynamicHiveFunction(functionInfo, config.getLocalHiveUdfJarsDir());
-                dynamicHiveFunction.ifPresent(this::addFunction);
             }
         }
         return functionDecoder.fromQualifiedName(name)
-                .orElseGet(() -> resolve(session, functionResolver.resolveFunction(session, name, parameterTypes, this::getTrinoFunction)));
+                .orElseGet(() -> resolve(session, functionResolver.resolveFunction(session, name, parameterTypes, this::getAllTrinoFunction)));
     }
 
     @Override
@@ -2251,18 +2323,36 @@ public final class MetadataManager
         return ImmutableList.of();
     }
 
-    protected Collection<FunctionMetadata> getTrinoFunction(CatalogSchemaFunctionName name)
+    protected Collection<FunctionMetadata> getAllTrinoFunction(CatalogSchemaFunctionName name)
     {
-        return functions.getTrinoFunction(name.getSchemaFunctionName());
+        return functions.getAllTrinoFunction(name.getSchemaFunctionName());
     }
 
     @Override
-    public void addFunction(SqlFunction function)
+    public void addHiveFunction(SqlFunction function)
     {
         InternalFunctionBundle.InternalFunctionBundleBuilder builder = InternalFunctionBundle.builder();
         builder.function(function);
         FunctionBundle functionBundle = builder.build();
-        functions.addFunctions(functionBundle);
+        functions.addFunctions(functionBundle, true);
+    }
+
+    @Override
+    public void updateHiveFunction(SqlFunction function)
+    {
+        InternalFunctionBundle.InternalFunctionBundleBuilder builder = InternalFunctionBundle.builder();
+        builder.function(function);
+        FunctionBundle functionBundle = builder.build();
+        functions.updateExternalFunctions(functionBundle);
+    }
+
+    @Override
+    public void dropHiveFunction(SqlFunction function)
+    {
+        InternalFunctionBundle.InternalFunctionBundleBuilder builder = InternalFunctionBundle.builder();
+        builder.function(function);
+        FunctionBundle functionBundle = builder.build();
+        functions.dropExternalFunctions(functionBundle);
     }
 
     @Override

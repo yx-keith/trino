@@ -110,7 +110,7 @@ public class CachingHiveMetastore
     private final LoadingCache<HiveTableName, Optional<Table>> tableCache;
     private final LoadingCache<String, List<String>> tableNamesCache;
     private final LoadingCache<String, List<DynamicHiveFunctionInfo>> allFunctionsCache;
-    private final LoadingCache<HiveFunctionKey, DynamicHiveFunctionInfo> functionCache;
+    private final LoadingCache<HiveFunctionKey, Optional<DynamicHiveFunctionInfo>> functionCache;
     private final LoadingCache<TablesWithParameterCacheKey, List<String>> tablesWithParameterCache;
     private final LoadingCache<HiveTableName, PartitionStatistics> tableStatisticsCache;
     private final LoadingCache<HivePartitionName, PartitionStatistics> partitionStatisticsCache;
@@ -441,12 +441,12 @@ public class CachingHiveMetastore
     }
 
     @Override
-    public DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    public Optional<DynamicHiveFunctionInfo> getFunction(HiveFunctionKey key)
     {
         return get(functionCache, key);
     }
 
-    private DynamicHiveFunctionInfo loadFunction(HiveFunctionKey key)
+    private Optional<DynamicHiveFunctionInfo> loadFunction(HiveFunctionKey key)
     {
         return delegate.getFunction(key);
     }

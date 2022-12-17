@@ -17,8 +17,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Enumeration;
@@ -35,32 +33,32 @@ public class HiveFunctionClassLoader
         extends URLClassLoader
 
 {
-    private static final ClassLoader PLATFORM_CLASS_LOADER = findPlatformClassLoader();
-    private final ClassLoader pluginClassLoader;
-    private final List<String> pluginPackages;
-    private final List<String> pluginResources;
+    private static final ClassLoader PLATFORM_CLASS_LOADER = getPlatformClassLoader();
+    private final ClassLoader spiClassLoader;
+    private final List<String> spiPackages;
+    private final List<String> spiResources;
 
     public HiveFunctionClassLoader(
             URL url,
-            ClassLoader pluginClassLoader,
-            Iterable<String> pluginPackages)
+            ClassLoader spiClassLoader,
+            Iterable<String> spiPackages)
     {
         this(List.of(url),
-                pluginClassLoader,
-                pluginPackages,
-                Iterables.transform(pluginPackages, HiveFunctionClassLoader::classNameToResource));
+                spiClassLoader,
+                spiPackages,
+                Iterables.transform(spiPackages, HiveFunctionClassLoader::classNameToResource));
     }
 
     private HiveFunctionClassLoader(
             List<URL> urls,
-            ClassLoader pluginClassLoader,
-            Iterable<String> pluginPackages,
-            Iterable<String> pluginResources)
+            ClassLoader spiClassLoader,
+            Iterable<String> spiPackages,
+            Iterable<String> spiResources)
     {
         super(urls.toArray(new URL[urls.size()]), PLATFORM_CLASS_LOADER);
-        this.pluginClassLoader = requireNonNull(pluginClassLoader, "pluginClassLoader is null");
-        this.pluginPackages = ImmutableList.copyOf(pluginPackages);
-        this.pluginResources = ImmutableList.copyOf(pluginResources);
+        this.spiClassLoader = requireNonNull(spiClassLoader, "pluginClassLoader is null");
+        this.spiPackages = ImmutableList.copyOf(spiPackages);
+        this.spiResources = ImmutableList.copyOf(spiResources);
     }
 
     @Override
@@ -73,7 +71,7 @@ public class HiveFunctionClassLoader
                 return resolveClass(cachedClass, resolve);
             }
             if (isPluginClass(name)) {
-                return resolveClass(pluginClassLoader.loadClass(name), resolve);
+                return resolveClass(spiClassLoader.loadClass(name), resolve);
             }
             return super.loadClass(name, resolve);
         }
@@ -91,7 +89,7 @@ public class HiveFunctionClassLoader
     public URL getResource(String name)
     {
         if (isPluginResource(name)) {
-            return pluginClassLoader.getResource(name);
+            return spiClassLoader.getResource(name);
         }
         return super.getResource(name);
     }
@@ -101,38 +99,23 @@ public class HiveFunctionClassLoader
             throws IOException
     {
         if (isPluginClass(name)) {
-            return pluginClassLoader.getResources(name);
+            return spiClassLoader.getResources(name);
         }
         return super.getResources(name);
     }
 
     private boolean isPluginClass(String name)
     {
-        return pluginPackages.stream().anyMatch(name::startsWith);
+        return spiPackages.stream().anyMatch(name::startsWith);
     }
 
     private boolean isPluginResource(String name)
     {
-        return pluginResources.stream().anyMatch(name::startsWith);
+        return spiResources.stream().anyMatch(name::startsWith);
     }
 
     private static String classNameToResource(String className)
     {
         return className.replace('.', '/');
-    }
-
-    @SuppressWarnings("JavaReflectionMemberAccess")
-    private static ClassLoader findPlatformClassLoader()
-    {
-        try {
-            Method method = ClassLoader.class.getMethod("getPlatformClassLoader");
-            return (ClassLoader) method.invoke(null);
-        }
-        catch (NoSuchMethodException ignored) {
-            return null;
-        }
-        catch (IllegalAccessException | InvocationTargetException e) {
-            throw new AssertionError(e);
-        }
     }
 }

@@ -231,7 +231,7 @@ public class SemiTransactionalHiveMetastore
         return delegate.getAllFunctions();
     }
 
-    public synchronized DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    public synchronized Optional<DynamicHiveFunctionInfo> getFunction(HiveFunctionKey key)
     {
         checkReadable();
         return delegate.getFunction(key);

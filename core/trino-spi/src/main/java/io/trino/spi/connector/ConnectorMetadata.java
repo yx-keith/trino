@@ -1341,8 +1341,8 @@ public interface ConnectorMetadata
         return null;
     }
 
-    default DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    default Optional<DynamicHiveFunctionInfo> getFunction(HiveFunctionKey key)
     {
-        return null;
+        return Optional.empty();
     }
 }

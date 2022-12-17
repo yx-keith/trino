@@ -695,7 +695,7 @@ public class HiveMetadata
     }
 
     @Override
-    public DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    public Optional<DynamicHiveFunctionInfo> getFunction(HiveFunctionKey key)
     {
         return metastore.getFunction(key);
     }

@@ -13,10 +13,7 @@
  */
 package io.trino.metadata;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableListMultimap;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Multimap;
+import com.google.common.collect.*;
 import io.trino.operator.aggregation.AggregationMetadata;
 import io.trino.operator.window.WindowFunctionSupplier;
 import io.trino.spi.function.*;
@@ -24,10 +21,8 @@ import io.trino.spi.type.TypeSignature;
 
 import javax.annotation.concurrent.ThreadSafe;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -50,6 +45,11 @@ public class GlobalFunctionCatalog
 
     public final synchronized void addFunctions(FunctionBundle functionBundle)
     {
+        addFunctions(functionBundle, false);
+    }
+
+    public final synchronized void addFunctions(FunctionBundle functionBundle, boolean isExternalFunction)
+    {
         for (FunctionMetadata functionMetadata : functionBundle.getFunctions()) {
             checkArgument(!functionMetadata.getSignature().getName().contains("|"), "Function name cannot contain '|' character: %s", functionMetadata.getSignature());
             checkArgument(!functionMetadata.getSignature().getName().contains("@"), "Function name cannot contain '@' character: %s", functionMetadata.getSignature());
@@ -59,7 +59,22 @@ public class GlobalFunctionCatalog
                 checkArgument(!functionMetadata.getSignature().equals(existingFunction.getSignature()), "Function already registered: %s", functionMetadata.getSignature());
             }
         }
-        this.functions = new FunctionMap(this.functions, functionBundle);
+        this.functions = new FunctionMap(this.functions, functionBundle, isExternalFunction);
+    }
+
+    public final synchronized void updateExternalFunctions(FunctionBundle functionBundle)
+    {
+        for (FunctionMetadata functionMetadata : functionBundle.getFunctions()) {
+            checkArgument(!functionMetadata.getSignature().getName().contains("|"), "Function name cannot contain '|' character: %s", functionMetadata.getSignature());
+            checkArgument(!functionMetadata.getSignature().getName().contains("@"), "Function name cannot contain '@' character: %s", functionMetadata.getSignature());
+            checkNotSpecializedTypeOperator(functionMetadata.getSignature());
+        }
+        this.functions = new FunctionMap(this.functions, functionBundle, true);
+    }
+
+    public final synchronized void dropExternalFunctions(FunctionBundle functionBundle)
+    {
+        this.functions.dropExternalFunction(functionBundle);
     }
 
     /**
@@ -124,7 +139,7 @@ public class GlobalFunctionCatalog
         return functions.get(name.getFunctionName());
     }
 
-    public Collection<FunctionMetadata> getTrinoFunction(SchemaFunctionName name)
+    public Collection<FunctionMetadata> getAllTrinoFunction(SchemaFunctionName name)
     {
         return functions.get(name.getFunctionName());
     }
@@ -169,6 +184,14 @@ public class GlobalFunctionCatalog
         private final Map<FunctionId, FunctionMetadata> functionsById;
         // function names are currently lower cased
         private final Multimap<String, FunctionMetadata> functionsByLowerCaseName;
+        private static final Map<FunctionId, FunctionBundle> externalFunctionBundlesById = new ConcurrentHashMap<>();
+        private static final Map<FunctionId, FunctionMetadata> externalFunctionsById = new ConcurrentHashMap<>();
+        // function names are currently lower cased
+        private static final Multimap<String, FunctionMetadata> externalFunctionsByLowerCaseName = ArrayListMultimap.create();
+        private final Map<FunctionId, FunctionBundle> mergeFunctionBundlesById = new ConcurrentHashMap<>();
+        private final Map<FunctionId, FunctionMetadata> mergeFunctionsById = new ConcurrentHashMap<>();
+        // function names are currently lower cased
+        private final Multimap<String, FunctionMetadata> mergeFunctionsByLowerCaseName = ArrayListMultimap.create();
 
         public FunctionMap()
         {
@@ -177,59 +200,116 @@ public class GlobalFunctionCatalog
             functionsByLowerCaseName = ImmutableListMultimap.of();
         }
 
-        public FunctionMap(FunctionMap map, FunctionBundle functionBundle)
+        public FunctionMap(FunctionMap map, FunctionBundle functionBundle, boolean isExternalFunction)
         {
-            this.functionBundlesById = ImmutableMap.<FunctionId, FunctionBundle>builder()
-                    .putAll(map.functionBundlesById)
-                    .putAll(functionBundle.getFunctions().stream()
-                            .collect(toImmutableMap(FunctionMetadata::getFunctionId, functionMetadata -> functionBundle)))
-                    .buildOrThrow();
+            if (!isExternalFunction) {
+                this.functionBundlesById = ImmutableMap.<FunctionId, FunctionBundle>builder()
+                        .putAll(map.functionBundlesById)
+                        .putAll(functionBundle.getFunctions().stream()
+                                .collect(toImmutableMap(FunctionMetadata::getFunctionId, functionMetadata -> functionBundle)))
+                        .buildOrThrow();
 
-            this.functionsById = ImmutableMap.<FunctionId, FunctionMetadata>builder()
-                    .putAll(map.functionsById)
-                    .putAll(functionBundle.getFunctions().stream()
-                            .collect(toImmutableMap(FunctionMetadata::getFunctionId, Function.identity())))
-                    .buildOrThrow();
+                this.functionsById = ImmutableMap.<FunctionId, FunctionMetadata>builder()
+                        .putAll(map.functionsById)
+                        .putAll(functionBundle.getFunctions().stream()
+                                .collect(toImmutableMap(FunctionMetadata::getFunctionId, Function.identity())))
+                        .buildOrThrow();
 
-            ImmutableListMultimap.Builder<String, FunctionMetadata> functionsByName = ImmutableListMultimap.<String, FunctionMetadata>builder()
-                    .putAll(map.functionsByLowerCaseName);
-            functionBundle.getFunctions()
-                    .forEach(functionMetadata -> functionsByName.put(functionMetadata.getSignature().getName().toLowerCase(ENGLISH), functionMetadata));
-            this.functionsByLowerCaseName = functionsByName.build();
+                ImmutableListMultimap.Builder<String, FunctionMetadata> functionsByName = ImmutableListMultimap.<String, FunctionMetadata>builder()
+                        .putAll(map.functionsByLowerCaseName);
+                functionBundle.getFunctions()
+                        .forEach(functionMetadata -> functionsByName.put(functionMetadata.getSignature().getName().toLowerCase(ENGLISH), functionMetadata));
+                this.functionsByLowerCaseName = functionsByName.build();
 
-            // Make sure all functions with the same name are aggregations or none of them are
-            for (Map.Entry<String, Collection<FunctionMetadata>> entry : this.functionsByLowerCaseName.asMap().entrySet()) {
-                Collection<FunctionMetadata> values = entry.getValue();
-                long aggregations = values.stream()
-                        .map(FunctionMetadata::getKind)
-                        .filter(kind -> kind == AGGREGATE)
-                        .count();
-                checkState(aggregations == 0 || aggregations == values.size(), "'%s' is both an aggregation and a scalar function", entry.getKey());
+                // Make sure all functions with the same name are aggregations or none of them are
+                for (Map.Entry<String, Collection<FunctionMetadata>> entry : this.functionsByLowerCaseName.asMap().entrySet()) {
+                    Collection<FunctionMetadata> values = entry.getValue();
+                    long aggregations = values.stream()
+                            .map(FunctionMetadata::getKind)
+                            .filter(kind -> kind == AGGREGATE)
+                            .count();
+                    checkState(aggregations == 0 || aggregations == values.size(), "'%s' is both an aggregation and a scalar function", entry.getKey());
+                }
             }
+            else {
+                this.functionBundlesById = map.functionBundlesById;
+                this.functionsById = map.functionsById;
+                this.functionsByLowerCaseName = map.functionsByLowerCaseName;
+                externalFunctionBundlesById.putAll(functionBundle.getFunctions().stream()
+                        .collect(toImmutableMap(FunctionMetadata::getFunctionId, functionMetadata -> functionBundle)));
+                externalFunctionsById.putAll(functionBundle.getFunctions().stream()
+                        .collect(toImmutableMap(FunctionMetadata::getFunctionId, Function.identity())));
+                functionBundle.getFunctions()
+                        .forEach(functionMetadata -> externalFunctionsByLowerCaseName.put(functionMetadata.getSignature().getName().toLowerCase(ENGLISH), functionMetadata));
+
+                // Make sure all functions with the same name are aggregations or none of them are
+                for (Map.Entry<String, Collection<FunctionMetadata>> entry : this.externalFunctionsByLowerCaseName.asMap().entrySet()) {
+                    Collection<FunctionMetadata> values = entry.getValue();
+                    long aggregations = values.stream()
+                            .map(FunctionMetadata::getKind)
+                            .filter(kind -> kind == AGGREGATE)
+                            .count();
+                    checkState(aggregations == 0 || aggregations == values.size(), "'%s' is both an aggregation and a scalar function", entry.getKey());
+                }
+            }
+            //merge trino function and external function
+            setMergeFunctionBundlesById();
+            setMergeFunctionsById();
+            setMergeFunctionsByLowerCaseName();
+        }
+
+        private void setMergeFunctionBundlesById()
+        {
+            mergeFunctionBundlesById.putAll(functionBundlesById);
+            mergeFunctionBundlesById.putAll(externalFunctionBundlesById);
+        }
+
+        private void setMergeFunctionsById()
+        {
+            mergeFunctionsById.putAll(functionsById);
+            mergeFunctionsById.putAll(externalFunctionsById);
+        }
+
+        private void setMergeFunctionsByLowerCaseName()
+        {
+            mergeFunctionsByLowerCaseName.putAll(functionsByLowerCaseName);
+            mergeFunctionsByLowerCaseName.putAll(externalFunctionsByLowerCaseName);
         }
 
         public List<FunctionMetadata> list()
         {
-            return ImmutableList.copyOf(functionsByLowerCaseName.values());
+            return ImmutableList.copyOf(mergeFunctionsByLowerCaseName.values());
         }
 
         public Collection<FunctionMetadata> get(String functionName)
         {
-            return functionsByLowerCaseName.get(functionName.toLowerCase(ENGLISH));
+            return mergeFunctionsByLowerCaseName.get(functionName.toLowerCase(ENGLISH));
         }
 
         public FunctionMetadata get(FunctionId functionId)
         {
-            FunctionMetadata functionMetadata = functionsById.get(functionId);
+            FunctionMetadata functionMetadata = mergeFunctionsById.get(functionId);
             checkArgument(functionMetadata != null, "Unknown function implementation: " + functionId);
             return functionMetadata;
         }
 
         public FunctionBundle getFunctionBundle(FunctionId functionId)
         {
-            FunctionBundle functionBundle = functionBundlesById.get(functionId);
+            FunctionBundle functionBundle = mergeFunctionBundlesById.get(functionId);
             checkArgument(functionBundle != null, "Unknown function implementation: " + functionId);
             return functionBundle;
+        }
+
+        public void dropExternalFunction(FunctionBundle functionBundle)
+        {
+            functionBundle.getFunctions().forEach(functionMetadata -> {
+                externalFunctionBundlesById.remove(functionMetadata.getFunctionId());
+                externalFunctionsById.remove(functionMetadata.getFunctionId());
+                externalFunctionsByLowerCaseName.remove(functionMetadata.getSignature().getName().toLowerCase(ENGLISH), functionMetadata);
+                mergeFunctionBundlesById.remove(functionMetadata.getFunctionId());
+                mergeFunctionsById.remove(functionMetadata.getFunctionId());
+                mergeFunctionsByLowerCaseName.remove(functionMetadata.getSignature().getName().toLowerCase(ENGLISH), functionMetadata);
+            });
         }
     }
 }

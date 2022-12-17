@@ -343,7 +343,7 @@ public class ThriftHiveMetastore
     }
 
     @Override
-    public DynamicHiveFunctionInfo getFunction(HiveIdentity identity, String dbName, String functionName)
+    public Optional<DynamicHiveFunctionInfo> getFunction(HiveIdentity identity, String dbName, String functionName)
     {
         try {
             return retry()

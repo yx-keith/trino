@@ -21,6 +21,7 @@ import org.apache.thrift.TException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 
 import static java.util.Objects.requireNonNull;
@@ -85,7 +86,7 @@ public class FailureAwareThriftMetastoreClient
     }
 
     @Override
-    public DynamicHiveFunctionInfo getFunction(String dbName, String functionName)
+    public Optional<DynamicHiveFunctionInfo> getFunction(String dbName, String functionName)
             throws TException
     {
         return runWithHandle(() -> delegate.getFunction(dbName, functionName));

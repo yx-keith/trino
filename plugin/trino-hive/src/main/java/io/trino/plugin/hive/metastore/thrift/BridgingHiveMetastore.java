@@ -155,7 +155,7 @@ public class BridgingHiveMetastore
     }
 
     @Override
-    public DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    public Optional<DynamicHiveFunctionInfo> getFunction(HiveFunctionKey key)
     {
         return delegate.getFunction(identity, key.getSchemaname(), key.getFunctionName());
     }

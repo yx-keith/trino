@@ -30,11 +30,13 @@ import org.apache.hadoop.hive.metastore.api.Role;
 import org.apache.hadoop.hive.metastore.api.RolePrincipalGrant;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.api.TxnToWriteId;
+import org.apache.thrift.Option;
 import org.apache.thrift.TException;
 
 import java.io.Closeable;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 
 public interface ThriftMetastoreClient
@@ -58,10 +60,10 @@ public interface ThriftMetastoreClient
         return null;
     }
 
-    default DynamicHiveFunctionInfo getFunction(String dbName, String functionName)
+    default Optional<DynamicHiveFunctionInfo> getFunction(String dbName, String functionName)
             throws TException
     {
-        return null;
+        return Optional.empty();
     }
 
 

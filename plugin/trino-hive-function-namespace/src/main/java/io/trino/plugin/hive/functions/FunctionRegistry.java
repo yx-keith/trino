@@ -16,6 +16,7 @@ package io.trino.plugin.hive.functions;
 import org.apache.hadoop.hive.ql.exec.FunctionInfo;
 import org.apache.hadoop.hive.ql.exec.Registry;
 import org.apache.hadoop.hive.ql.exec.UDF;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.SemanticException;
 
 /**
@@ -25,7 +26,7 @@ import org.apache.hadoop.hive.ql.parse.SemanticException;
  */
 public final class FunctionRegistry
 {
-    private static final Registry registry = new Registry(true);
+    private static final Registry registry = new Registry(false);
 
     public static void registry(String functionName)
     {

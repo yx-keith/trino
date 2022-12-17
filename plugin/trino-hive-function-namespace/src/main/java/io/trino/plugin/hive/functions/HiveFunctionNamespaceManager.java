@@ -90,11 +90,11 @@ public class HiveFunctionNamespaceManager
             if (!classLoaderCache.containsKey(localUrl)) {
                 classLoaderCache.put(localUrl, new HiveFunctionClassLoader(localUrl, classLoader, SPI_PACKAGES));
             }
-            HiveFunctionClassLoader hiveFunctionClassLoader = classLoaderCache.get(localUrl);
+
             Class<?> functionClass;
             String functionName = dynamicHiveFunctionInfo.getFunctionName();
             try {
-                hiveFunctionParser.registryFunction(functionName);
+                registryFunction(functionName);
                 functionClass = hiveFunctionParser.getClass(functionName);
             } catch (ClassNotFoundException e) {
                 throw functionNotFund(functionName);
@@ -102,6 +102,7 @@ public class HiveFunctionNamespaceManager
 
             if(isAssignableFrom(functionClass, UDF.class)) {
                 RecognizedFunctions.addRecognizedFunction(dynamicHiveFunctionInfo.getClassName());
+                HiveFunctionClassLoader hiveFunctionClassLoader = classLoaderCache.get(localUrl);
                 FunctionUtil funcUtil = new FunctionUtil(dynamicHiveFunctionInfo, hiveFunctionClassLoader);
                 Method[] methods = funcUtil.getClazz().getMethods();
                 for (Method method : methods) {
@@ -114,6 +115,12 @@ public class HiveFunctionNamespaceManager
             }
         }
         return Optional.empty();
+    }
+
+    @Override
+    public void registryFunction(String functionName)
+    {
+        hiveFunctionParser.registryFunction(functionName);
     }
 
     private DynamicHiveScalarFunction createDynamicHiveScalarFunction(FunctionUtil funcUtil, Method method, ClassLoader classLoader) {

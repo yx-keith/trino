@@ -133,7 +133,7 @@ public class HiveMetastoreClosure
         return delegate.getAllFunctions();
     }
 
-    public DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    public Optional<DynamicHiveFunctionInfo> getFunction(HiveFunctionKey key)
     {
         return delegate.getFunction(key);
     }

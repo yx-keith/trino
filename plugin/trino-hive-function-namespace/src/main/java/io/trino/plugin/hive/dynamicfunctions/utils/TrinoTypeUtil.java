@@ -185,13 +185,13 @@ public class TrinoTypeUtil
 
     private static TypeSignature getTypeSignatureFromPrimitiveJava(java.lang.reflect.Type type)
     {
-        return HiveTypeTranslator.translateFromHiveTypeInfo(getPrimitiveTypeInfoFromJavaPrimitive((Class<?>) type));
+        return HiveTypeTranslator.fromHiveTypeInfo(getPrimitiveTypeInfoFromJavaPrimitive((Class<?>) type));
     }
 
     private static TypeSignature getTypeSignatureFromList(ParameterizedType pType)
     {
         Class<?> elementType = (Class<?>) pType.getActualTypeArguments()[0];
-        return HiveTypeTranslator.translateFromHiveTypeInfo(getListTypeInfo(
+        return HiveTypeTranslator.fromHiveTypeInfo(getListTypeInfo(
                 getPrimitiveTypeInfoFromJavaPrimitive(elementType)));
     }
 
@@ -199,7 +199,7 @@ public class TrinoTypeUtil
     {
         Class<?> keyType = (Class<?>) pType.getActualTypeArguments()[0];
         Class<?> valueType = (Class<?>) pType.getActualTypeArguments()[1];
-        return HiveTypeTranslator.translateFromHiveTypeInfo(getMapTypeInfo(
+        return HiveTypeTranslator.fromHiveTypeInfo(getMapTypeInfo(
                 getPrimitiveTypeInfoFromJavaPrimitive(keyType),
                 getPrimitiveTypeInfoFromJavaPrimitive(valueType)));
     }

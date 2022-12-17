@@ -21,6 +21,7 @@ import org.apache.hadoop.hive.common.type.HiveChar;
 import org.apache.hadoop.hive.common.type.HiveVarchar;
 import org.apache.hadoop.hive.serde2.typeinfo.*;
 
+import static io.trino.plugin.hive.dynamicfunctions.utils.HiveTimestampPrecision.DEFAULT_PRECISION;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -45,12 +46,12 @@ public class HiveTypeTranslator
     {
     }
 
-    static TypeSignature translateFromHiveTypeInfo(TypeInfo typeInfo)
+    static TypeSignature fromHiveTypeInfo(TypeInfo typeInfo)
     {
-        return limitedDepthTranslateFromHiveTypeInfo(typeInfo, DynamicFunctionsConstants.MAX_HIVE_TYPE_STRUCT_LEVEL);
+        return fromHiveTypeInfoLimitDepth(typeInfo, DynamicFunctionsConstants.MAX_HIVE_TYPE_STRUCT_LEVEL);
     }
 
-    private static TypeSignature limitedDepthTranslateFromHiveTypeInfo(TypeInfo typeInfo, int maxDepth)
+    private static TypeSignature fromHiveTypeInfoLimitDepth(TypeInfo typeInfo, int maxDepth)
     {
         int nowDepth = maxDepth - 1;
         if (nowDepth <= 0) {
@@ -58,21 +59,21 @@ public class HiveTypeTranslator
         }
         switch (typeInfo.getCategory()) {
             case PRIMITIVE:
-                Type primitiveType = translateFromHivePrimitiveTypeInfo((PrimitiveTypeInfo) typeInfo);
+                Type primitiveType = fromHivePrimitiveTypeInfo((PrimitiveTypeInfo) typeInfo);
                 if (primitiveType == null) {
                     break;
                 }
                 return primitiveType.getTypeSignature();
             case MAP:
                 MapTypeInfo mapTypeInfo = (MapTypeInfo) typeInfo;
-                TypeSignature keyType = limitedDepthTranslateFromHiveTypeInfo(mapTypeInfo.getMapKeyTypeInfo(), nowDepth);
-                TypeSignature valueType = limitedDepthTranslateFromHiveTypeInfo(mapTypeInfo.getMapValueTypeInfo(), nowDepth);
+                TypeSignature keyType = fromHiveTypeInfoLimitDepth(mapTypeInfo.getMapKeyTypeInfo(), nowDepth);
+                TypeSignature valueType = fromHiveTypeInfoLimitDepth(mapTypeInfo.getMapValueTypeInfo(), nowDepth);
                 return new TypeSignature(
                         StandardTypes.MAP,
                         ImmutableList.of(TypeSignatureParameter.typeParameter(keyType), TypeSignatureParameter.typeParameter(valueType)));
             case LIST:
                 ListTypeInfo listTypeInfo = (ListTypeInfo) typeInfo;
-                TypeSignature elementType = limitedDepthTranslateFromHiveTypeInfo(listTypeInfo.getListElementTypeInfo(), nowDepth);
+                TypeSignature elementType = fromHiveTypeInfoLimitDepth(listTypeInfo.getListElementTypeInfo(), nowDepth);
                 return new TypeSignature(
                         StandardTypes.ARRAY,
                         ImmutableList.of(TypeSignatureParameter.typeParameter(elementType)));
@@ -80,7 +81,12 @@ public class HiveTypeTranslator
         throw new TrinoException(NOT_SUPPORTED, format("Unsupported Hive type: %s", typeInfo));
     }
 
-    static Type translateFromHivePrimitiveTypeInfo(PrimitiveTypeInfo typeInfo)
+    public static Type fromHivePrimitiveTypeInfo(PrimitiveTypeInfo typeInfo)
+    {
+        return fromHivePrimitiveTypeInfo(typeInfo, DEFAULT_PRECISION);
+    }
+
+    static Type fromHivePrimitiveTypeInfo(PrimitiveTypeInfo typeInfo, HiveTimestampPrecision timestampPrecision)
     {
         switch (typeInfo.getPrimitiveCategory()) {
             case BOOLEAN:

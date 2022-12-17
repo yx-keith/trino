@@ -42,12 +42,13 @@ import java.util.concurrent.TimeUnit;
 import static io.trino.plugin.hive.dynamicfunctions.utils.TrinoTypeUtil.getTypeSignature;
 import static io.trino.plugin.hive.dynamicfunctions.utils.TrinoTypeUtil.getTypeSignatures;
 import static io.trino.plugin.hive.dynamicfunctions.utils.HiveObjectTranslator.translateFromHiveObject;
-import static io.trino.plugin.hive.dynamicfunctions.utils.HiveObjectTranslator.translateToHiveObject;
+import static io.trino.plugin.hive.dynamicfunctions.utils.HiveObjectTranslator.serializeObject;
 import static io.trino.spi.StandardErrorCode.*;
 import static io.trino.spi.function.FunctionKind.SCALAR;
 import static io.trino.spi.function.InvocationConvention.InvocationArgumentConvention.BOXED_NULLABLE;
 import static io.trino.spi.function.InvocationConvention.InvocationArgumentConvention.NEVER_NULL;
 import static io.trino.spi.function.InvocationConvention.InvocationReturnConvention.NULLABLE_RETURN;
+import static io.trino.spi.function.InvocationConvention.InvocationArgumentConvention;
 import static java.lang.String.format;
 
 public class DynamicHiveScalarFunction
@@ -57,10 +58,10 @@ public class DynamicHiveScalarFunction
     private static final int EVALUATE_METHOD_PARAM_LENGTH = 5;
     private ExecutorService executor;
     private FunctionUtil funcUtil;
-    private java.lang.reflect.Type[] evalParamJavaTypes;
-    private java.lang.reflect.Type evalReturnJavaTypes;
-    private Type[] evalParamTrinoTypes;
-    private Type evalReturnTrinoType;
+    private java.lang.reflect.Type[] paramJavaTypes;
+    private java.lang.reflect.Type returnJavaTypes;
+    private Type[] paramTrinoTypes;
+    private Type returnTrinoType;
     private ClassLoader classLoader;
     private boolean maxFuncRunningTimeEnable;
     private long maxFuncRunningTimeInSec;
@@ -70,8 +71,8 @@ public class DynamicHiveScalarFunction
                                      long maxFuncRunningTimeInSec, int functionRunningThreadPoolSize)
     {
         this.funcUtil = funcUtil;
-        this.evalParamJavaTypes = genericParameterTypes;
-        this.evalReturnJavaTypes = genericReturnType;
+        this.paramJavaTypes = genericParameterTypes;
+        this.returnJavaTypes = genericReturnType;
         this.classLoader = classLoader;
         this.maxFuncRunningTimeEnable = maxFuncRunningTimeEnable;
         if (maxFuncRunningTimeEnable) {
@@ -84,9 +85,9 @@ public class DynamicHiveScalarFunction
     @Override
     public ScalarFunctionImplementation specialize(BoundSignature boundSignature)
     {
-        this.evalParamTrinoTypes = getTypeSignatures(evalParamJavaTypes).stream().map(TrinoTypeUtil::getType)
+        this.paramTrinoTypes = getTypeSignatures(paramJavaTypes).stream().map(TrinoTypeUtil::getType)
                 .toArray(Type[]::new);
-        this.evalReturnTrinoType = TrinoTypeUtil.getType(getTypeSignature(evalReturnJavaTypes));
+        this.returnTrinoType = TrinoTypeUtil.getType(getTypeSignature(returnJavaTypes));
         return new ChoicesScalarFunctionImplementation(
                 boundSignature,
                 NULLABLE_RETURN,
@@ -94,10 +95,10 @@ public class DynamicHiveScalarFunction
                 getMethodHandle());
     }
 
-    private List<InvocationConvention.InvocationArgumentConvention> getNullableArgumentConventions()
+    private List<InvocationArgumentConvention> getNullableArgumentConventions()
     {
-        List<InvocationConvention.InvocationArgumentConvention> nullableArgConventions = new ArrayList<>(evalParamTrinoTypes.length);
-        for(Type type : evalParamTrinoTypes) {
+        List<InvocationArgumentConvention> nullableArgConventions = new ArrayList<>(paramTrinoTypes.length);
+        for(Type type : paramTrinoTypes) {
             nullableArgConventions.add(type.getJavaType().isPrimitive() ? BOXED_NULLABLE : NEVER_NULL);
         }
         return nullableArgConventions;
@@ -106,22 +107,20 @@ public class DynamicHiveScalarFunction
     private MethodHandle getMethodHandle()
     {
         MethodHandle genericMethodHandle = Reflection.methodHandle(DynamicHiveScalarFunction.class,
-                "invokeHive", getMethodHandleArgumentTypes(evalParamTrinoTypes, true)).bindTo(this);
-        Class<?> specificMethodHandleReturnType = ClassUtils.primitiveToWrapper(evalReturnTrinoType.getJavaType());
-        MethodType specificMethodType = MethodType.methodType(specificMethodHandleReturnType,
-                getMethodHandleArgumentTypes(evalParamTrinoTypes, false));
+                "invokeHive", getArgumentTypes(paramTrinoTypes, true)).bindTo(this);
+        Class<?> returnType = ClassUtils.primitiveToWrapper(returnTrinoType.getJavaType());
+        Class<?>[] paramTypes = getArgumentTypes(paramTrinoTypes, false);
+        MethodType specificMethodType = MethodType.methodType(returnType, paramTypes);
         return MethodHandles.explicitCastArguments(genericMethodHandle, specificMethodType);
     }
 
-    private Class<?>[] getMethodHandleArgumentTypes(Type[] argTypes, boolean isGeneric)
+    private Class<?>[] getArgumentTypes(Type[] argTypes, boolean isGeneric)
     {
-        Class<?>[] methodHandleArgumentTypes = new Class<?>[argTypes.length];
+        Class<?>[] argumentTypes = new Class<?>[argTypes.length];
         for (int i = 0; i < argTypes.length; i++) {
-            methodHandleArgumentTypes[i] = isGeneric
-                    ? Object.class
-                    : ClassUtils.primitiveToWrapper(argTypes[i].getJavaType());
+            argumentTypes[i] = isGeneric ? Object.class : ClassUtils.primitiveToWrapper(argTypes[i].getJavaType());
         }
-        return methodHandleArgumentTypes;
+        return argumentTypes;
     }
 
     @UsedByGeneratedCode
@@ -169,21 +168,21 @@ public class DynamicHiveScalarFunction
         }
         Object[] hiveObjs = new Object[objs.length];
         for (int i = 0; i < objs.length; i++) {
-            hiveObjs[i] = translateToHiveObject(this.evalParamTrinoTypes[i], objs[i], this.evalParamJavaTypes[i]);
+            hiveObjs[i] = serializeObject(this.paramTrinoTypes[i], objs[i], this.paramJavaTypes[i]);
         }
         Method method = getEvaluateMethod(objs.length);
         Object result;
         try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
             result = invokeFunction(method, hiveObjs);
         }
-        return translateFromHiveObject(this.evalReturnTrinoType, result);
+        return translateFromHiveObject(this.returnTrinoType, result);
     }
 
     private Method getEvaluateMethod(int paramNum)
     {
         Class<?>[] paramTypes = new Class[paramNum];
         for (int i = 0; i < paramNum; i++) {
-            java.lang.reflect.Type paramType = this.evalParamJavaTypes[i];
+            java.lang.reflect.Type paramType = this.paramJavaTypes[i];
             paramTypes[i] = paramType instanceof ParameterizedType
                     ? (Class<?>) ((ParameterizedType) paramType).getRawType()
                     : (Class<?>) paramType;

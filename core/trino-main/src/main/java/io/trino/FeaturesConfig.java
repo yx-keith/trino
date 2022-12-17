@@ -115,6 +115,8 @@ public class FeaturesConfig
     private boolean maxFunctionRunningTimeEnable;
     private long maxFunctionRunningTimeInSec = 600;
     private int functionRunningThreadPoolSize = 100;
+    private int hiveFunctionRefreshInterval = 10;
+    private Boolean dynamicUpdateHiveFunctionEnabled;
 
     public enum DataIntegrityVerification
     {
@@ -603,6 +605,30 @@ public class FeaturesConfig
     public FeaturesConfig setRemoteHiveUdfJarsPath(String remoteHiveUdfJarsPath)
     {
         this.remoteHiveUdfJarsPath = remoteHiveUdfJarsPath;
+        return this;
+    }
+
+    public int getHiveFunctionRefreshInterval()
+    {
+        return hiveFunctionRefreshInterval;
+    }
+
+    @Config("hive-function-refresh.interval-time")
+    public FeaturesConfig setHiveFunctionRefreshInterval(int hiveFunctionRefreshInterval)
+    {
+        this.hiveFunctionRefreshInterval = hiveFunctionRefreshInterval;
+        return this;
+    }
+
+    public Boolean getDynamicUpdateHiveFunctionEnabled()
+    {
+        return dynamicUpdateHiveFunctionEnabled;
+    }
+
+    @Config("dynamic-update-hive-function.enabled")
+    public FeaturesConfig setDynamicUpdateHiveFunctionEnabled(Boolean dynamicUpdateHiveFunctionEnabled)
+    {
+        this.dynamicUpdateHiveFunctionEnabled = dynamicUpdateHiveFunctionEnabled;
         return this;
     }
 

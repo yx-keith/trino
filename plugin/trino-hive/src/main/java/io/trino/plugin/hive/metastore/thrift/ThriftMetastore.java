@@ -71,9 +71,9 @@ public interface ThriftMetastore
         return null;
     }
 
-    default DynamicHiveFunctionInfo getFunction(HiveIdentity identity, String dbName, String functionName)
+    default Optional<DynamicHiveFunctionInfo> getFunction(HiveIdentity identity, String dbName, String functionName)
     {
-        return null;
+        return Optional.empty();
     }
 
     List<String> getTablesWithParameter(HiveIdentity identity, String databaseName, String parameterKey, String parameterValue);

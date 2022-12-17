@@ -249,7 +249,7 @@ public class ClassLoaderSafeConnectorMetadata
     }
 
     @Override
-    public DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    public Optional<DynamicHiveFunctionInfo> getFunction(HiveFunctionKey key)
     {
         try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
             return delegate.getFunction(key);

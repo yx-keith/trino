@@ -16,10 +16,10 @@ package io.trino.plugin.hive.functions;
 import com.google.inject.Inject;
 import io.trino.plugin.hive.ForHiveFunction;
 import io.trino.spi.function.HiveFunctionParser;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.SemanticException;
 
-import static io.trino.plugin.hive.functions.FunctionRegistry.getFunctionInfo;
-import static io.trino.plugin.hive.functions.FunctionRegistry.registry;
+import static io.trino.plugin.hive.functions.FunctionRegistry.*;
 import static java.util.Objects.requireNonNull;
 
 /**

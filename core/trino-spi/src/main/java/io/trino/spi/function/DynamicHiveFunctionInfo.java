@@ -13,6 +13,8 @@
  */
 package io.trino.spi.function;
 
+import java.util.Optional;
+
 /**
  * @author yaoxiao
  * @version 1.0
@@ -20,17 +22,25 @@ package io.trino.spi.function;
  */
 public final class DynamicHiveFunctionInfo
 {
+    private final String schemaName;
     private final String functionName;
     private final String className;
     private final String resourceUri;
     private final int createTime;
+    private SqlFunction dynamicHiveFunction;
 
-    public DynamicHiveFunctionInfo(String functionName, String className, String resourceUri, int createTime)
+    public DynamicHiveFunctionInfo(String schemaName, String functionName, String className, String resourceUri, int createTime)
     {
+        this.schemaName = schemaName;
         this.functionName = functionName;
         this.className = className;
         this.resourceUri = resourceUri;
         this.createTime = createTime;
+    }
+
+    public String getSchemaName()
+    {
+        return schemaName;
     }
 
     public String getFunctionName()
@@ -53,10 +63,21 @@ public final class DynamicHiveFunctionInfo
         return createTime;
     }
 
+    public SqlFunction getDynamicHiveFunction()
+    {
+        return dynamicHiveFunction;
+    }
+
+    public void setDynamicHiveFunction(SqlFunction dynamicHiveFunction)
+    {
+        this.dynamicHiveFunction = dynamicHiveFunction;
+    }
+
     @Override
     public String toString() {
         return "DynamicHiveFunctionInfo{" +
-                "functionName='" + functionName + '\'' +
+                "schemaName='" + schemaName + '\'' +
+                ", functionName='" + functionName + '\'' +
                 ", className='" + className + '\'' +
                 ", resourceUri='" + resourceUri + '\'' +
                 ", createTime=" + createTime +

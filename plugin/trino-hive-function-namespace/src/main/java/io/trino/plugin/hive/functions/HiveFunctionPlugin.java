@@ -100,7 +100,7 @@ public class HiveFunctionPlugin
             String className = parts.get(1);
             String jarName = parts.get(2);
             URL localUrl = new File(this.HIVE_UDF_DIR + File.separator + jarName).toURI().toURL();
-            DynamicHiveFunctionInfo dynamicHiveFunctionInfo = new DynamicHiveFunctionInfo(funcName, className, jarName, Integer.MAX_VALUE);
+            DynamicHiveFunctionInfo dynamicHiveFunctionInfo = new DynamicHiveFunctionInfo(null, funcName, className, jarName, Integer.MAX_VALUE);
             StaticHiveFunctionInfo functionInfo = new StaticHiveFunctionInfo(dynamicHiveFunctionInfo, localUrl, null);
             functionInfoCache.put(funcName, functionInfo);
         }

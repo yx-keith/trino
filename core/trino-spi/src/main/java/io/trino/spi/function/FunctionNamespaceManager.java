@@ -23,4 +23,5 @@ import java.util.Optional;
 public interface FunctionNamespaceManager
 {
     Optional<SqlFunction> initDynamicHiveFunction(DynamicHiveFunctionInfo dynamicHiveFunctionInfo, String localDir);
+    void registryFunction(String functionName);
 }

@@ -163,6 +163,7 @@ public class Server
                 injector.getInstance(PluginManager.class).loadPlugins();
 
                 injector.getInstance(StaticCatalogStore.class).loadCatalogs();
+                injector.getInstance(FunctionNamespaceStore.class).loadFunctionNamespaceManagers();
 
                 // TODO: remove this huge hack
                 updateConnectorIds(injector.getInstance(Announcer.class), injector.getInstance(CatalogManager.class));
@@ -178,7 +179,6 @@ public class Server
                 injector.getInstance(CertificateAuthenticatorManager.class).loadCertificateAuthenticator();
                 injector.getInstance(optionalKey(HeaderAuthenticatorManager.class))
                         .ifPresent(HeaderAuthenticatorManager::loadHeaderAuthenticator);
-                injector.getInstance(FunctionNamespaceStore.class).loadFunctionNamespaceManagers();
 
                 injector.getInstance(optionalKey(OAuth2Client.class)).ifPresent(OAuth2Client::load);
 

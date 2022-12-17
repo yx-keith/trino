@@ -29,10 +29,7 @@ import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.transport.TTransport;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.OptionalLong;
+import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.reflect.Reflection.newProxy;
@@ -101,19 +98,25 @@ public class ThriftHiveMetastoreClient
         List<DynamicHiveFunctionInfo> list = new ArrayList<>();
         GetAllFunctionsResponse functionsResp = client.get_all_functions();
         functionsResp.getFunctions().forEach(function -> {
-            DynamicHiveFunctionInfo functionInfo = new DynamicHiveFunctionInfo(function.getFunctionName(), function.getClassName(), function.getResourceUris().get(0).getUri(), function.getCreateTime());
+            DynamicHiveFunctionInfo functionInfo = new DynamicHiveFunctionInfo(function.getDbName(), function.getFunctionName(), function.getClassName(), function.getResourceUris().get(0).getUri(), function.getCreateTime());
             list.add(functionInfo);
         });
         return list;
     }
 
     @Override
-    public DynamicHiveFunctionInfo getFunction(String dbName, String functionName)
+    public Optional<DynamicHiveFunctionInfo> getFunction(String dbName, String functionName)
             throws TException
     {
-        Function function = client.get_function(dbName, functionName);
-        DynamicHiveFunctionInfo functionInfo = new DynamicHiveFunctionInfo(function.getFunctionName(), function.getClassName(), function.getResourceUris().get(0).getUri(), function.getCreateTime());
-        return functionInfo;
+        Optional<DynamicHiveFunctionInfo> optionalDynamicHiveFunctionInfo = Optional.empty();
+        Function function = null;
+        try {
+            function = client.get_function(dbName, functionName);
+        } catch (NoSuchObjectException e) {
+            return optionalDynamicHiveFunctionInfo;
+        }
+        return Optional.of(new DynamicHiveFunctionInfo(dbName, function.getFunctionName(), function.getClassName(),
+                function.getResourceUris().get(0).getUri(), function.getCreateTime()));
     }
 
     @Override

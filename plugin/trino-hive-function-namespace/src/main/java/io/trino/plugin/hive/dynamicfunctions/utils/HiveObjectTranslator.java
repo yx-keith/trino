@@ -32,7 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static io.trino.plugin.hive.dynamicfunctions.utils.HiveTypeTranslator.translateFromHivePrimitiveTypeInfo;
+import static io.trino.plugin.hive.dynamicfunctions.utils.HiveTypeTranslator.fromHivePrimitiveTypeInfo;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.String.format;
@@ -51,17 +51,25 @@ public class HiveObjectTranslator
      * @param javaType: Java type of the object
      * @return a Hive object
      */
-    public static Object translateToHiveObject(Type type, Object obj, java.lang.reflect.Type javaType)
+    public static Object serializeObject(Type type, Object obj, java.lang.reflect.Type javaType)
     {
         if (obj == null) {
             return null;
         }
-        return translateToHiveObject(getInspector(type), obj, javaType);
+        return serializeObject(getInspector(type), obj, javaType);
     }
 
-    private static Object translateToHiveObject(ObjectInspector inspector, Object obj, java.lang.reflect.Type javaType)
+    private static Object serializeObject(ObjectInspector inspector, Object obj, java.lang.reflect.Type javaType)
     {
-        if (inspector instanceof PrimitiveObjectInspector) {
+        switch (inspector.getCategory()) {
+            case PRIMITIVE:
+                return serializeToPrimitiveObject(inspector, obj);
+            case LIST:
+                return serializeToListObject(inspector, obj, javaType);
+            case MAP:
+                return serializeToMapObject(inspector, obj, javaType);
+        }
+     /*   if (inspector instanceof PrimitiveObjectInspector) {
             return translateToPrimitiveHiveObject(inspector, obj);
         }
         if (inspector instanceof ListObjectInspector) {
@@ -69,11 +77,11 @@ public class HiveObjectTranslator
         }
         if (inspector instanceof MapObjectInspector) {
             return translateToMapHiveObject(inspector, obj, javaType);
-        }
+        }*/
         throw new TrinoException(NOT_SUPPORTED, String.format("Unsupported Hive type: %s", inspector.getTypeName()));
     }
 
-    private static Object translateToPrimitiveHiveObject(ObjectInspector inspector, Object obj)
+    private static Object serializeToPrimitiveObject(ObjectInspector inspector, Object obj)
     {
         if (inspector instanceof StringObjectInspector) {
             return ((Slice) obj).toStringUtf8();
@@ -97,7 +105,7 @@ public class HiveObjectTranslator
         return obj;
     }
 
-    private static Object translateToListHiveObject(ObjectInspector inspector, Object obj, java.lang.reflect.Type type)
+    private static Object serializeToListObject(ObjectInspector inspector, Object obj, java.lang.reflect.Type type)
     {
         if (!(type instanceof ParameterizedType)) {
             throw new TrinoException(NOT_SUPPORTED, format("Type of %s is not ParameterizedType", obj));
@@ -108,13 +116,13 @@ public class HiveObjectTranslator
         List<Object> result = new ArrayList<>(positionCount);
         for (int i = 0; i < positionCount; i++) {
             result.add(
-                    translateToHiveObject(eleInspector, readFromBlock(block, i, eleInspector),
+                    serializeObject(eleInspector, readFromBlock(block, i, eleInspector),
                             ((ParameterizedType) type).getActualTypeArguments()[0]));
         }
         return result;
     }
 
-    private static Object translateToMapHiveObject(ObjectInspector inspector, Object obj, java.lang.reflect.Type type)
+    private static Object serializeToMapObject(ObjectInspector inspector, Object obj, java.lang.reflect.Type type)
     {
         if (!(type instanceof ParameterizedType)) {
             throw new TrinoException(NOT_SUPPORTED, format("Type of Object %s is not ParameterizedType", obj));
@@ -126,9 +134,9 @@ public class HiveObjectTranslator
         Map<Object, Object> result = new HashMap<>(positionCount);
         for (int i = 0; i < positionCount; i = i + 2) {
             result.put(
-                    translateToHiveObject(keyInspector, readFromBlock(block, i, keyInspector),
+                    serializeObject(keyInspector, readFromBlock(block, i, keyInspector),
                             ((ParameterizedType) type).getActualTypeArguments()[0]),
-                    translateToHiveObject(valueInspector, readFromBlock(block, i + 1, valueInspector),
+                    serializeObject(valueInspector, readFromBlock(block, i + 1, valueInspector),
                             ((ParameterizedType) type).getActualTypeArguments()[1]));
         }
         return result;
@@ -220,7 +228,7 @@ public class HiveObjectTranslator
         ListObjectInspector listInspector = (ListObjectInspector) inspector;
         List<?> list = listInspector.getList(obj);
         ObjectInspector elementObjectInspector = listInspector.getListElementObjectInspector();
-        Type elementType = translateFromHivePrimitiveTypeInfo(
+        Type elementType = fromHivePrimitiveTypeInfo(
                 ((AbstractPrimitiveJavaObjectInspector) elementObjectInspector).getTypeInfo());
         int positionCount = list.size();
         BlockBuilder resultBuilder = elementType.createBlockBuilder(null, positionCount);

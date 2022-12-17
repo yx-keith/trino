@@ -66,9 +66,9 @@ public interface HiveMetastore
         return null;
     }
 
-    default DynamicHiveFunctionInfo getFunction(HiveFunctionKey key)
+    default Optional<DynamicHiveFunctionInfo> getFunction(HiveFunctionKey key)
     {
-        return null;
+        return Optional.empty();
     }
 
     List<String> getTablesWithParameter(String databaseName, String parameterKey, String parameterValue);

@@ -234,6 +234,7 @@ public class PluginManager
             globalFunctionCatalog.addFunctions(builder.build());
         }
 
+        //待下线
         Set<Object> hiveUdfs = plugin.getHiveUdfFunctions();
         if (!hiveUdfs.isEmpty()) {
             log.info("Registering functions from %s", plugin.getClass().getSimpleName());
