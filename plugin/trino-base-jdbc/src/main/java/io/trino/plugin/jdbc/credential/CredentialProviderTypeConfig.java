@@ -17,12 +17,14 @@ import io.airlift.configuration.Config;
 
 import javax.validation.constraints.NotNull;
 
+import static io.trino.plugin.jdbc.credential.AdditionalCredentialProviderType.IMPERSONATION;
 import static io.trino.plugin.jdbc.credential.CredentialProviderType.INLINE;
 import static java.util.Objects.requireNonNull;
 
 public class CredentialProviderTypeConfig
 {
     private CredentialProviderType credentialProviderType = INLINE;
+    private AdditionalCredentialProviderType additionalCredentialProviderType = IMPERSONATION;
 
     @NotNull
     public CredentialProviderType getCredentialProviderType()
@@ -34,6 +36,18 @@ public class CredentialProviderTypeConfig
     public CredentialProviderTypeConfig setCredentialProviderType(CredentialProviderType credentialProviderType)
     {
         this.credentialProviderType = requireNonNull(credentialProviderType, "credentialProviderType is null");
+        return this;
+    }
+    @NotNull
+    public AdditionalCredentialProviderType getAdditionalCredentialProviderType()
+    {
+        return additionalCredentialProviderType;
+    }
+
+    @Config("additional-credential-provider.type")
+    public CredentialProviderTypeConfig setAdditionalCredentialProviderType(AdditionalCredentialProviderType additionalCredentialProviderType)
+    {
+        this.additionalCredentialProviderType = additionalCredentialProviderType;
         return this;
     }
 }
