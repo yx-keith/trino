@@ -34,7 +34,9 @@ public class TestPhoenixConfig
                 .setConnectionUrl(null)
                 .setResourceConfigFiles("")
                 .setMaxScansPerSplit(20)
-                .setReuseConnection(true));
+                .setReuseConnection(true)
+                .setHbaseKerberosEnabled(false)
+                .setHbaseImpersonationEnabled(false));
     }
 
     @Test

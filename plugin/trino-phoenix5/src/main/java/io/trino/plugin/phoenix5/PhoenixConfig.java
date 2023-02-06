@@ -31,6 +31,8 @@ public class PhoenixConfig
 
     private String connectionUrl;
     private List<String> resourceConfigFiles = ImmutableList.of();
+    private boolean hbaseKerberosEnabled;
+    private boolean hbaseImpersonationEnabled;
 
     /*
      * By default group at most 20 HBase scans into a single Split.
@@ -94,6 +96,32 @@ public class PhoenixConfig
     public PhoenixConfig setReuseConnection(boolean reuseConnection)
     {
         this.reuseConnection = reuseConnection;
+        return this;
+    }
+
+    public boolean isHbaseImpersonationEnabled()
+    {
+        return hbaseImpersonationEnabled;
+    }
+
+    @Config("hbase.impersonation.enabled")
+    @ConfigDescription("Should Trino user be impersonated when communicating with phoenix")
+    public PhoenixConfig setHbaseImpersonationEnabled(boolean hbaseImpersonationEnabled)
+    {
+        this.hbaseImpersonationEnabled = hbaseImpersonationEnabled;
+        return this;
+    }
+
+    public boolean isHbaseKerberosEnabled()
+    {
+        return hbaseKerberosEnabled;
+    }
+
+    @Config("hbase.kerberos.enabled")
+    @ConfigDescription("Should Trino user be impersonated when communicating with phoenix")
+    public PhoenixConfig setHbaseKerberosEnabled(boolean hbaseKerberosEnabled)
+    {
+        this.hbaseKerberosEnabled = hbaseKerberosEnabled;
         return this;
     }
 }
