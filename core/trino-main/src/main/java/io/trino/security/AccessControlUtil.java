@@ -15,6 +15,7 @@ package io.trino.security;
 
 import io.trino.SessionRepresentation;
 import io.trino.server.BasicQueryInfo;
+import io.trino.server.SessionContext;
 import io.trino.spi.security.Identity;
 
 import java.util.Collection;
@@ -58,5 +59,23 @@ public final class AccessControlUtil
             return;
         }
         accessControl.checkCanKillQueryOwnedBy(identity, queryOwner);
+    }
+
+    public static String getUser(AccessControl accessControl, SessionContext context)
+    {
+        checkCanImpersonateUser(accessControl, context);
+        return context.getIdentity().getUser();
+    }
+
+    private static void checkCanImpersonateUser(AccessControl accessControl, SessionContext context)
+    {
+        Identity identity = context.getIdentity();
+        // authenticated identity is not present for HTTP or if authentication is not setup
+        context.getAuthenticatedIdentity().ifPresent(authenticatedIdentity -> {
+            if (!authenticatedIdentity.getUser().equals(identity.getUser())) {
+                // only check impersonation if authenticated user is not the same as the explicitly set user
+                accessControl.checkCanImpersonateUser(authenticatedIdentity, identity.getUser());
+            }
+        });
     }
 }

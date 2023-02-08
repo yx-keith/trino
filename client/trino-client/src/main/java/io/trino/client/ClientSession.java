@@ -71,7 +71,7 @@ public class ClientSession
                 .build();
     }
 
-    private ClientSession(
+    public ClientSession(
             URI server,
             Optional<String> principal,
             Optional<String> user,
