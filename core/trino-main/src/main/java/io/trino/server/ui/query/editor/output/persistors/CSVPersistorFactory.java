@@ -11,30 +11,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.server.ui.query.editor;
+package io.trino.server.ui.query.editor.output.persistors;
 
-import io.airlift.configuration.Config;
-import io.airlift.units.Duration;
-
-import static java.util.concurrent.TimeUnit.MINUTES;
+import io.trino.server.ui.query.editor.output.PersistentJobOutput;
+import io.trino.server.ui.query.editor.protocol.Job;
+import io.trino.server.ui.query.editor.store.files.ExpiringFileStore;
 
 /**
  * @author yaoxiao
  * @version 1.0
- * @date 2023/1/9 9:24
+ * @date 2023/2/9 13:43
  */
-public class QueryEditorConfig
+public class CSVPersistorFactory
 {
-    private Duration executionTimeout = new Duration(15, MINUTES);
+    private ExpiringFileStore expiringFileStore;
 
-    public Duration getExecutionTimeout()
+    public CSVPersistorFactory(ExpiringFileStore expiringFileStore)
     {
-        return executionTimeout;
+        this.expiringFileStore = expiringFileStore;
     }
 
-    @Config("trino.query-ui.execution-timeout")
-    public void setExecutionTimeout(Duration executionTimeout)
+    public Persistor getPersistor(Job job, PersistentJobOutput jobOutput)
     {
-        this.executionTimeout = executionTimeout;
+        return new FlatFilePersistor(expiringFileStore);
     }
 }

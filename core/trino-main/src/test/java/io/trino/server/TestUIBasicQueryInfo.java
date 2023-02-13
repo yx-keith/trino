@@ -42,7 +42,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
-public class TestBasicQueryInfo
+public class TestUIBasicQueryInfo
 {
     @Test
     public void testConstructor()

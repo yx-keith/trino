@@ -1,3 +1,16 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.trino.server.ui.query.editor.protocol;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -88,7 +101,7 @@ public class Table
             columns.add(c.getName());
         }
 
-        return new Table(input.getCatalogName().getCatalogName(), input.getSchema(), input.getTable(), columns);
+        return new Table(input.getCatalogName(), input.getSchema(), input.getTable(), columns);
     }
 
     @JsonProperty
@@ -144,7 +157,7 @@ public class Table
         if (obj instanceof Input) {
             Input other = (Input) obj;
 
-            return getConnectorId().equals(other.getCatalogName().getCatalogName()) &&
+            return getConnectorId().equals(other.getCatalogName()) &&
                     getSchema().equals(other.getSchema()) &&
                     getTable().equals(other.getTable());
         }

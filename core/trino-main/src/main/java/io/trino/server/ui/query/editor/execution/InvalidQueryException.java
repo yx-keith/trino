@@ -11,24 +11,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.server.ui.query.editor.output;
-
-import java.net.URI;
+package io.trino.server.ui.query.editor.execution;
 
 /**
  * @author yaoxiao
  * @version 1.0
- * @date 2023/2/8 15:45
+ * @date 2023/2/9 10:57
  */
-public interface PersistentJobOutput
+public class InvalidQueryException
+        extends Exception
 {
-    String getType();
-
-    String getDescription();
-
-    URI getLocation();
-
-    void setLocation(URI location);
-
-    String processQuery(String query);
+    public InvalidQueryException(String message)
+    {
+        super(message);
+    }
 }

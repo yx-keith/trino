@@ -11,24 +11,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.server.ui.query.editor.output;
+package io.trino.server.ui.query.editor.output.persistors;
+
+import io.trino.server.ui.query.editor.execution.QueryExecutionAuthorizer;
+import io.trino.server.ui.query.editor.output.builds.JobOutputBuilder;
+import io.trino.server.ui.query.editor.protocol.Job;
 
 import java.net.URI;
 
 /**
  * @author yaoxiao
  * @version 1.0
- * @date 2023/2/8 15:45
+ * @date 2023/2/9 13:45
  */
-public interface PersistentJobOutput
+public interface Persistor
 {
-    String getType();
+    boolean canPersist(QueryExecutionAuthorizer authorizer);
 
-    String getDescription();
-
-    URI getLocation();
-
-    void setLocation(URI location);
-
-    String processQuery(String query);
+    URI persist(JobOutputBuilder outputBuilder, Job job);
 }

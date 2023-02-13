@@ -11,24 +11,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.server.ui.query.editor.output;
+package io.trino.server.ui.query.editor.output.builds;
 
-import java.net.URI;
+import io.trino.client.Column;
+
+import java.io.File;
+import java.util.List;
 
 /**
  * @author yaoxiao
  * @version 1.0
- * @date 2023/2/8 15:45
+ * @date 2023/2/9 10:52
  */
-public interface PersistentJobOutput
+public interface JobOutputBuilder
 {
-    String getType();
+    void addRow(List<Object> row)
+            throws FileTooLargeException;
 
-    String getDescription();
-
-    URI getLocation();
-
-    void setLocation(URI location);
+    void addColumns(List<Column> columns)
+            throws FileTooLargeException;
 
     String processQuery(String query);
+    File build();
+
+    void delete();
 }
