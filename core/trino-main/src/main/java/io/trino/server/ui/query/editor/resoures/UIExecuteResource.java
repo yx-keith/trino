@@ -19,19 +19,18 @@ import io.trino.security.AccessControlUtil;
 import io.trino.server.HttpRequestSessionContextFactory;
 import io.trino.server.ProtocolConfig;
 import io.trino.server.SessionContext;
+import io.trino.server.security.ResourceSecurity;
 import io.trino.server.ui.query.editor.QueryEditorConfig;
 import io.trino.server.ui.query.editor.execution.ExecutionClient;
 import io.trino.server.ui.query.editor.protocol.ExecutionRequest;
+import io.trino.server.ui.query.editor.protocol.ExecutionSimpleRequest;
 import io.trino.server.ui.query.editor.protocol.ExecutionStatus.ExecutionError;
 import io.trino.server.ui.query.editor.protocol.ExecutionStatus.ExecutionSuccess;
 import io.trino.spi.security.Identity;
 import org.joda.time.Duration;
 
 import javax.servlet.http.HttpServletRequest;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
 import javax.ws.rs.core.*;
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +38,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static io.trino.server.HttpRequestSessionContextFactory.AUTHENTICATED_IDENTITY;
+import static io.trino.server.security.ResourceSecurity.AccessType.PUBLIC;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -70,6 +70,7 @@ public class UIExecuteResource
         this.alternateHeaderName = requireNonNull(protocolConfig, "protocolConfig is null").getAlternateHeaderName();
     }
 
+    @ResourceSecurity(PUBLIC)
     @PUT
     @Path("execute")
     @Produces(MediaType.APPLICATION_JSON)
@@ -97,5 +98,17 @@ public class UIExecuteResource
         return Response.status(Response.Status.NOT_FOUND)
                 .entity(new ExecutionError("Currently not able to execute"))
                 .build();
+    }
+
+    @ResourceSecurity(PUBLIC)
+    @POST
+    @Path("execute/simple")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response execute(ExecutionSimpleRequest request)
+    {
+        List<UUID> uuids = client.runQuery(request.getQuery(), request.getUser(), request.getDefaultCatalog(), request.getDefaultSchema(), Duration.millis(config.getExecutionTimeout().toMillis()));
+        List<ExecutionSuccess> successList = uuids.stream().map(ExecutionSuccess::new).collect(Collectors.toList());
+        return Response.ok(successList).build();
     }
 }

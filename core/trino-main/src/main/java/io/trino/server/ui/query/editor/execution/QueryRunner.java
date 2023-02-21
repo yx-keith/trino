@@ -19,6 +19,7 @@ import okhttp3.OkHttpClient;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -85,6 +86,10 @@ public class QueryRunner
             return httpClient;
         }
 
+        public QueryRunner create(String user, String catalog, String schema)
+        {
+            return new QueryRunner(sessionFactory.create(user, catalog, schema, new HashMap<>()), httpClient);
+        }
         public QueryRunner create(String user, String catalog, String schema, Map<String, String> properties)
         {
             return new QueryRunner(sessionFactory.create(user, catalog, schema, properties), httpClient);

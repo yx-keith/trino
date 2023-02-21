@@ -59,11 +59,9 @@ public class Execution
     private final RateLimiter updateLimiter = RateLimiter.create(2.0);
     private final int maxRowsPreviewOutput = 1_000;
     private boolean isCancelled;
-    private URI requestUri;
 
     public Execution(Job job, QueryRunner queryRunner, QueryInfoClient queryInfoClient,
-                     QueryExecutionAuthorizer authorizer, Duration timeout, OutputBuilderFactory outputBuilderFactory,
-                     URI requestUri)
+                     QueryExecutionAuthorizer authorizer, Duration timeout, OutputBuilderFactory outputBuilderFactory)
     {
         this.job = job;
         this.queryRunner = queryRunner;
@@ -71,7 +69,6 @@ public class Execution
         this.authorizer = authorizer;
         this.timeout = timeout;
         this.outputBuilderFactory = outputBuilderFactory;
-        this.requestUri = requestUri;
     }
 
     public void cancel()
@@ -89,10 +86,10 @@ public class Execution
             throws ExecutionFailureException
     {
         final String userQuery = QUERY_SPLITTER.splitToList(getJob().getQuery()).get(0);
-        final JobOutputBuilder outputBuilder;
+//        final JobOutputBuilder outputBuilder;
         job.setQueryStats(createNoOpQueryStats());
 
-        try {
+    /*    try {
             outputBuilder = outputBuilderFactory.forJob(job);
         }
         catch (IOException e) {
@@ -100,11 +97,9 @@ public class Execution
         }
         catch (InvalidQueryException e) {
             throw new ExecutionFailureException(job, e.getMessage(), e);
-        }
+        }*/
 
         final String query = job.getOutput().processQuery(userQuery);
-
-
         final Set<Table> tables = new HashSet<>();
 
         try {
@@ -127,7 +122,7 @@ public class Execution
 
         QueryClient queryClient = new QueryClient(queryRunner, timeout, query);
         try {
-            queryClient.executeWith((client) -> {
+            queryClient.executeWith(client -> {
                 if (client == null) {
                     return null;
                 }
@@ -151,7 +146,8 @@ public class Execution
                 }
 
                 if ((statusInfo.getInfoUri() != null) && (jobState != JobState.FAILED)) {
-                    UIBasicQueryInfo queryInfo = queryInfoClient.from(statusInfo.getInfoUri(), statusInfo.getId());
+                    //获取query在服务端执行的状态及信息,UIBasicQueryInfo接口可扩展,参考io.trino.execution.QueryInfo
+                    UIBasicQueryInfo queryInfo = queryInfoClient.getQueryInfo(statusInfo.getInfoUri(), statusInfo.getId());
 
                     if (queryInfo != null) {
                         queryStats = queryInfo.getQueryStats();
@@ -170,7 +166,7 @@ public class Execution
                     jobState = JobState.fromStatementState(statusInfo.getStats().getState());
                 }
 
-                try {
+/*                try {
                     if (statusInfo.getColumns() != null) {
                         resultColumns = statusInfo.getColumns();
                         outputBuilder.addColumns(resultColumns);
@@ -188,9 +184,9 @@ public class Execution
                     throw new ExecutionFailureException(job,
                             "Output file exceeded maximum configured filesize",
                             e);
-                }
+                }*/
 
-                rlUpdateJobInfo(tables, resultColumns, queryStats, jobState, queryError);
+                updateJobInfo(tables, resultColumns, queryStats, jobState, queryError);
                 return null;
             });
         }
@@ -202,7 +198,7 @@ public class Execution
 
         QueryStatusInfo finalResults = queryClient.finalResults();
         if (finalResults != null && finalResults.getInfoUri() != null) {
-            UIBasicQueryInfo queryInfo = queryInfoClient.from(finalResults.getInfoUri(), finalResults.getId());
+            UIBasicQueryInfo queryInfo = queryInfoClient.getQueryInfo(finalResults.getInfoUri(), finalResults.getId());
 
             if (queryInfo != null) {
                 updateJobInfo(

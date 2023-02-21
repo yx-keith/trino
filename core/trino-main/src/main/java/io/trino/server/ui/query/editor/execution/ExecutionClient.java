@@ -108,15 +108,41 @@ public class ExecutionClient
             results.add(job.getUuid());
             jobs.offer(job);
         }
-        scheduleExecution(timeout, queryRunner, authorizer, jobs, requestURI);
+        scheduleExecution(timeout, queryRunner, authorizer, jobs);
+        return results.build();
+    }
+
+    public List<UUID> runQuery(String query, String user, String catalog, String schema, Duration timeout)
+    {
+        QueryRunner queryRunner = queryRunnerFactory.create(user, catalog, schema);
+        QueryExecutionAuthorizer authorizer = new QueryExecutionAuthorizer(user, catalog, schema);
+        List<String> subStatements = QUERY_SPLITTER.splitToList(query);
+        BlockingQueue<Job> jobs = new ArrayBlockingQueue<>(subStatements.size());
+        ImmutableList.Builder<UUID> results = ImmutableList.builder();
+
+        for(String statement : subStatements) {
+            UUID uuid = UUID.randomUUID();
+            Job job = new Job(user,
+                    statement,
+                    uuid,
+                    persistentJobOutputFactory.create(null, uuid),
+                    null,
+                    JobState.QUEUED,
+                    Collections.emptyList(),
+                    null,
+                    null,
+                    null);
+            results.add(job.getUuid());
+            jobs.offer(job);
+        }
+        scheduleExecution(timeout, queryRunner, authorizer, jobs);
         return results.build();
     }
 
     private UUID scheduleExecution(Duration timeout,
                                    QueryRunner queryRunner,
                                    QueryExecutionAuthorizer authorizer,
-                                   BlockingQueue<Job> jobs,
-                                   URI requestUri)
+                                   BlockingQueue<Job> jobs)
     {
         final Job job;
         try {
@@ -131,8 +157,7 @@ public class ExecutionClient
                 queryInfoClient,
                 authorizer,
                 timeout,
-                outputBuilderFactory,
-                requestUri);
+                outputBuilderFactory);
 
         executionMap.put(job.getUuid(), execution);
 
@@ -148,7 +173,7 @@ public class ExecutionClient
                 //Add Active Job
                 if (jobs.peek() != null) {
                     QueryRunner nextQueryRunner = getNextQueryRunner();
-                    scheduleExecution(timeout, nextQueryRunner, authorizer, jobs, requestUri);
+                    scheduleExecution(timeout, nextQueryRunner, authorizer, jobs);
                 }
                 jobFinished(result);
             }
@@ -159,29 +184,41 @@ public class ExecutionClient
                 StatementClient client = queryRunner.getCurrentClient();
                 ClientSession session = queryRunner.getSession();
                 ClientSession.Builder builder = ClientSession.builder(session);
+
                 if (client.getSetCatalog().isPresent()) {
                     builder.catalog(client.getSetCatalog().get());
                 }
+
                 if (client.getSetSchema().isPresent()) {
                     builder.schema(client.getSetSchema().get());
                 }
+
+                // update transaction ID if necessary
                 if (client.getStartedTransactionId() != null) {
                     builder = builder.transactionId(client.getStartedTransactionId());
                 }
+
+                // update path if present
                 if (client.getSetPath().isPresent()) {
                     builder = builder.path(client.getSetPath().get());
                 }
+
+                // update session properties if present
                 if (!client.getSetSessionProperties().isEmpty() || !client.getResetSessionProperties().isEmpty()) {
                     Map<String, String> sessionProperties = new HashMap<>(session.getProperties());
                     sessionProperties.putAll(client.getSetSessionProperties());
                     sessionProperties.keySet().removeAll(client.getResetSessionProperties());
                     builder = builder.properties(sessionProperties);
                 }
+
+                // update session roles
                 if (!client.getSetRoles().isEmpty()) {
                     Map<String, ClientSelectedRole> roles = new HashMap<>(session.getRoles());
                     roles.putAll(client.getSetRoles());
                     builder = builder.roles(roles);
                 }
+
+                // update prepared statements if present
                 if (!client.getAddedPreparedStatements().isEmpty() || !client.getDeallocatedPreparedStatements().isEmpty()) {
                     Map<String, String> preparedStatements = new HashMap<>(session.getPreparedStatements());
                     preparedStatements.putAll(client.getAddedPreparedStatements());
@@ -199,7 +236,6 @@ public class ExecutionClient
                     job.setError(new QueryError(t.getMessage(), null, -1, null,
                             null, null, null));
                 }
-
                 jobFinished(job);
             }
         }, MoreExecutors.directExecutor());

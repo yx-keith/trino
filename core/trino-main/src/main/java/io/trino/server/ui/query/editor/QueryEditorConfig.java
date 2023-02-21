@@ -14,6 +14,7 @@
 package io.trino.server.ui.query.editor;
 
 import io.airlift.configuration.Config;
+import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -26,6 +27,10 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 public class QueryEditorConfig
 {
     private Duration executionTimeout = new Duration(15, MINUTES);
+    private boolean isRunningEmbeded = true;
+    private String coordinatorUri;
+    private DataSize maxFileSize = new DataSize(1, DataSize.Unit.GIGABYTE);
+    private int maxResultCount = 1000;
 
     public Duration getExecutionTimeout()
     {
@@ -36,5 +41,52 @@ public class QueryEditorConfig
     public void setExecutionTimeout(Duration executionTimeout)
     {
         this.executionTimeout = executionTimeout;
+    }
+
+    @Config("trino.query-ui.embeded-mode")
+    public QueryEditorConfig setRunningEmbeded(boolean runningEmbeded)
+    {
+        isRunningEmbeded = runningEmbeded;
+        return this;
+    }
+
+    public boolean isRunningEmbeded()
+    {
+        return isRunningEmbeded;
+    }
+
+    @Config("trino.query-ui.server.uri")
+    public QueryEditorConfig setCoordinatorUri(String coordinatorUri)
+    {
+        this.coordinatorUri = coordinatorUri;
+        return this;
+    }
+
+    public String getCoordinatorUri()
+    {
+        return coordinatorUri;
+    }
+
+    public DataSize getMaxFileSize()
+    {
+        return maxFileSize;
+    }
+
+    @Config("trino.query-ui.max-result-size-mb")
+    public QueryEditorConfig setMaxFileSize(int maxFileSizeMb)
+    {
+        this.maxFileSize = new DataSize(maxFileSizeMb, DataSize.Unit.MEGABYTE);
+        return this;
+    }
+
+    public int getMaxResultCount()
+    {
+        return maxResultCount;
+    }
+
+    @Config("hetu.query-ui.max-result-count")
+    public void setMaxResultCount(int maxResultCount)
+    {
+        this.maxResultCount = maxResultCount;
     }
 }

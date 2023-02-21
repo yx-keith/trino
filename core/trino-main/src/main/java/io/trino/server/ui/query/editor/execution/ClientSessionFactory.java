@@ -71,7 +71,7 @@ public class ClientSessionFactory
     public ClientSession create(String user, String catalog, String schema, Map<String, String> properties, String source)
     {
         return new ClientSession(server.get(),
-                null,
+                Optional.empty(),
                 Optional.of(user),
                 source,
                 Optional.empty(),

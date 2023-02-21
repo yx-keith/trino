@@ -48,16 +48,9 @@ public class QueryInfoClient
         this.okHttpClient = okHttpClient;
     }
 
-    public UIBasicQueryInfo from(URI infoUri, String id)
+    public UIBasicQueryInfo getQueryInfo(URI serverUri, String queryId)
     {
-        infoUri = requireNonNull(infoUri, "infoUri is null");
-        HttpUrl url = HttpUrl.get(infoUri);
-        url = url.newBuilder().encodedPath("/v1/query/" + id).query(null).build();
-
-        Request.Builder request = new Request.Builder()
-                .addHeader(USER_AGENT, USER_AGENT_VALUE)
-                .url(url);
-
+        Request.Builder request = prepareRequest(serverUri, queryId);
         JsonResponse<UIBasicQueryInfo> response = JsonResponse.execute(QUERY_INFO_CODEC, okHttpClient, request.build(), OptionalLong.empty());
         if ((response.getStatusCode() != HTTP_OK) || !response.hasValue()) {
             if (response.getStatusCode() != Response.Status.GONE.getStatusCode()) {
@@ -66,5 +59,17 @@ public class QueryInfoClient
             return null;
         }
         return response.getValue();
+    }
+
+    private Request.Builder prepareRequest(URI uri, String queryId)
+    {
+        uri = requireNonNull(uri, "infoUri is null");
+        HttpUrl url = HttpUrl.get(uri);
+        url = url.newBuilder().encodedPath("/v1/query/" + queryId).query(null).build();
+
+        Request.Builder request = new Request.Builder()
+                .addHeader(USER_AGENT, USER_AGENT_VALUE)
+                .url(url);
+        return request;
     }
 }

@@ -97,6 +97,7 @@ import io.trino.server.protocol.QueryInfoUrlFactory;
 import io.trino.server.remotetask.RemoteTaskStats;
 import io.trino.server.ui.WebUiModule;
 import io.trino.server.ui.WorkerResource;
+import io.trino.server.ui.query.editor.QueryEditorModule;
 import io.trino.spi.memory.ClusterMemoryPoolManager;
 import io.trino.sql.analyzer.AnalyzerFactory;
 import io.trino.sql.analyzer.QueryExplainerFactory;
@@ -153,6 +154,7 @@ public class CoordinatorModule
 
         // coordinator announcement
         discoveryBinder(binder).bindHttpAnnouncement("trino-coordinator");
+        install(new QueryEditorModule());
 
         // statement resource
         jsonCodecBinder(binder).bindJsonCodec(TaskInfo.class);
