@@ -24,27 +24,28 @@ import static java.util.concurrent.TimeUnit.MINUTES;
  * @version 1.0
  * @date 2023/1/9 9:24
  */
-public class QueryEditorConfig
+public class TelePalConfig
 {
     private Duration executionTimeout = new Duration(15, MINUTES);
     private boolean isRunningEmbeded = true;
     private String coordinatorUri;
     private DataSize maxFileSize = new DataSize(1, DataSize.Unit.GIGABYTE);
     private int maxResultCount = 1000;
+    private String resultPath = "/tmp";
 
     public Duration getExecutionTimeout()
     {
         return executionTimeout;
     }
 
-    @Config("trino.query-ui.execution-timeout")
+    @Config("telepal.query-execution-timeout")
     public void setExecutionTimeout(Duration executionTimeout)
     {
         this.executionTimeout = executionTimeout;
     }
 
-    @Config("trino.query-ui.embeded-mode")
-    public QueryEditorConfig setRunningEmbeded(boolean runningEmbeded)
+    @Config("telepal.query-embeded-mode")
+    public TelePalConfig setRunningEmbeded(boolean runningEmbeded)
     {
         isRunningEmbeded = runningEmbeded;
         return this;
@@ -55,8 +56,8 @@ public class QueryEditorConfig
         return isRunningEmbeded;
     }
 
-    @Config("trino.query-ui.server.uri")
-    public QueryEditorConfig setCoordinatorUri(String coordinatorUri)
+    @Config("trino.server.uri")
+    public TelePalConfig setCoordinatorUri(String coordinatorUri)
     {
         this.coordinatorUri = coordinatorUri;
         return this;
@@ -72,8 +73,8 @@ public class QueryEditorConfig
         return maxFileSize;
     }
 
-    @Config("trino.query-ui.max-result-size-mb")
-    public QueryEditorConfig setMaxFileSize(int maxFileSizeMb)
+    @Config("telepal.query-max-result-size-mb")
+    public TelePalConfig setMaxFileSize(int maxFileSizeMb)
     {
         this.maxFileSize = new DataSize(maxFileSizeMb, DataSize.Unit.MEGABYTE);
         return this;
@@ -84,9 +85,22 @@ public class QueryEditorConfig
         return maxResultCount;
     }
 
-    @Config("hetu.query-ui.max-result-count")
-    public void setMaxResultCount(int maxResultCount)
+    @Config("telepal.query-max-result-count")
+    public TelePalConfig setMaxResultCount(int maxResultCount)
     {
         this.maxResultCount = maxResultCount;
+        return this;
+    }
+
+    public String getResultPath()
+    {
+        return resultPath;
+    }
+
+    @Config("telepal.query-result-path")
+    public TelePalConfig setResultPath(String resultPath)
+    {
+        this.resultPath = resultPath;
+        return this;
     }
 }

@@ -90,6 +90,26 @@ public class QueryResource
 
     @ResourceSecurity(AUTHENTICATED_USER)
     @GET
+    @Path("basic/{queryId}")
+    public Response getBasicQueryInfo(@PathParam("queryId") QueryId queryId, @Context HttpServletRequest servletRequest, @Context HttpHeaders httpHeaders)
+    {
+        requireNonNull(queryId, "queryId is null");
+
+        Optional<BasicQueryInfo> queryInfo = dispatchManager.getBasicQueryInfo(queryId);
+        if (queryInfo.isEmpty()) {
+            return Response.status(Status.GONE).build();
+        }
+        try {
+            checkCanViewQueryOwnedBy(sessionContextFactory.extractAuthorizedIdentity(servletRequest, httpHeaders, alternateHeaderName), queryInfo.get().getSession().toIdentity(), accessControl);
+            return Response.ok(queryInfo).build();
+        }
+        catch (AccessDeniedException e) {
+            throw new ForbiddenException();
+        }
+    }
+
+    @ResourceSecurity(AUTHENTICATED_USER)
+    @GET
     @Path("{queryId}")
     public Response getQueryInfo(@PathParam("queryId") QueryId queryId, @Context HttpServletRequest servletRequest, @Context HttpHeaders httpHeaders)
     {

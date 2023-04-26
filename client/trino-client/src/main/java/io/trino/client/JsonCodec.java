@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.fasterxml.jackson.datatype.joda.JodaModule;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -44,7 +45,8 @@ public class JsonCodec<T>
             .disable(MapperFeature.CAN_OVERRIDE_ACCESS_MODIFIERS)
             .disable(MapperFeature.INFER_PROPERTY_MUTATORS)
             .disable(MapperFeature.ALLOW_FINAL_FIELDS_AS_MUTATORS)
-            .registerModule(new Jdk8Module());
+            .registerModule(new Jdk8Module())
+            .registerModule(new JodaModule());
 
     public static <T> JsonCodec<T> jsonCodec(Class<T> type)
     {

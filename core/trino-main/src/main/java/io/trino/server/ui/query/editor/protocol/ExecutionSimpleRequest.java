@@ -43,7 +43,7 @@ public class ExecutionSimpleRequest
             @JsonProperty("user") final String user)
     {
         this.query = query;
-        this.user = user == null ? "trino" : user;
+        this.user = user;
         this.defaultCatalog = defaultCatalog == null ? "hive" : defaultCatalog;
         this.defaultSchema = defaultSchema == null ? "default" : defaultSchema;
     }

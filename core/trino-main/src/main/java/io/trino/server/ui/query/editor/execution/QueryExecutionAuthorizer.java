@@ -28,13 +28,13 @@ import static java.util.Objects.requireNonNull;
 public class QueryExecutionAuthorizer
 {
     private final String user;
-    private final String defaultConnector;
+    private final String defaultCatalog;
     private final String defaultSchema;
 
-    public QueryExecutionAuthorizer(String user, String defaultConnector, String defaultSchema)
+    public QueryExecutionAuthorizer(String user, String defaultCatalog, String defaultSchema)
     {
         this.user = requireNonNull(user);
-        this.defaultConnector = requireNonNull(defaultConnector);
+        this.defaultCatalog = requireNonNull(defaultCatalog);
         this.defaultSchema = requireNonNull(defaultSchema);
     }
 
@@ -57,6 +57,6 @@ public class QueryExecutionAuthorizer
 
     public Set<Table> tablesUsedByQuery(String query)
     {
-        return tablesUsedByQuery(query, defaultConnector, defaultSchema);
+        return tablesUsedByQuery(query, defaultCatalog, defaultSchema);
     }
 }

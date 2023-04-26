@@ -24,6 +24,7 @@ import okhttp3.ResponseBody;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.io.UncheckedIOException;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -154,6 +155,44 @@ public final class JsonResponse<T>
             return new JsonResponse<>(response.code(), response.headers(), responseBody.string());
         }
         catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    public static <T> JsonResponse<T> execute(JsonCodec<T> codec, OkHttpClient client, Request request)
+    {
+        try (Response response = client.newCall(request).execute()) {
+            // TODO: fix in OkHttp: https://github.com/square/okhttp/issues/3111
+            if ((response.code() == 307) || (response.code() == 308)) {
+                String location = response.header(LOCATION);
+                if (location != null) {
+                    request = request.newBuilder().url(location).build();
+                    return execute(codec, client, request);
+                }
+            }
+
+            ResponseBody responseBody = requireNonNull(response.body());
+            String body = responseBody.string();
+            if (isJson(responseBody.contentType())) {
+                T value = null;
+                IllegalArgumentException exception = null;
+                try {
+                    value = codec.fromJson(body);
+                }
+                catch (IllegalArgumentException e) {
+                    exception = new IllegalArgumentException(format("Unable to create %s from JSON response:\n[%s]", codec.getType(), responseBody), e);
+                }
+                return new JsonResponse<>(response.code(), response.headers(), body, value, exception);
+            }
+            return new JsonResponse<>(response.code(),  response.headers(), body);
+        }
+        catch (IOException e) {
+            // OkHttp throws this after clearing the interrupt status
+            // TODO: remove after updating to Okio 1.15.0+
+            if ((e instanceof InterruptedIOException) && "thread interrupted".equals(e.getMessage())) {
+                Thread.currentThread().interrupt();
+            }
+
             throw new UncheckedIOException(e);
         }
     }

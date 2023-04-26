@@ -22,10 +22,10 @@ import okhttp3.Request;
 
 import javax.ws.rs.core.Response;
 import java.net.URI;
-import java.util.OptionalLong;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.net.HttpHeaders.USER_AGENT;
+import static io.trino.client.ProtocolHeaders.TRINO_HEADERS;
 import static java.net.HttpURLConnection.HTTP_OK;
 import static java.util.Objects.requireNonNull;
 
@@ -40,9 +40,8 @@ public class QueryInfoClient
     private static final String USER_AGENT_VALUE = QueryInfoClient.class.getSimpleName() +
             "/" +
             firstNonNull(QueryInfoClient.class.getPackage().getImplementationVersion(), "unknown");
-    private static final JsonCodec<UIBasicQueryInfo> QUERY_INFO_CODEC = JsonCodec.jsonCodec(UIBasicQueryInfo.class);
+    private static final JsonCodec<UIBasicQueryInfo> UI_BASIC_QUERY_INFO_CODEC = JsonCodec.jsonCodec(UIBasicQueryInfo.class);
     private final OkHttpClient okHttpClient;
-
     public QueryInfoClient(OkHttpClient okHttpClient)
     {
         this.okHttpClient = okHttpClient;
@@ -51,7 +50,7 @@ public class QueryInfoClient
     public UIBasicQueryInfo getQueryInfo(URI serverUri, String queryId)
     {
         Request.Builder request = prepareRequest(serverUri, queryId);
-        JsonResponse<UIBasicQueryInfo> response = JsonResponse.execute(QUERY_INFO_CODEC, okHttpClient, request.build(), OptionalLong.empty());
+        JsonResponse<UIBasicQueryInfo> response = JsonResponse.execute(UI_BASIC_QUERY_INFO_CODEC, okHttpClient, request.build());
         if ((response.getStatusCode() != HTTP_OK) || !response.hasValue()) {
             if (response.getStatusCode() != Response.Status.GONE.getStatusCode()) {
                 LOG.warn("Error while getting query info! {}", response.getValue());
@@ -65,10 +64,11 @@ public class QueryInfoClient
     {
         uri = requireNonNull(uri, "infoUri is null");
         HttpUrl url = HttpUrl.get(uri);
-        url = url.newBuilder().encodedPath("/v1/query/" + queryId).query(null).build();
+        url = url.newBuilder().encodedPath("/v1/query/" + "basic/" + queryId).query(null).build();
 
         Request.Builder request = new Request.Builder()
                 .addHeader(USER_AGENT, USER_AGENT_VALUE)
+                .addHeader(TRINO_HEADERS.requestUser(), "unknown")
                 .url(url);
         return request;
     }

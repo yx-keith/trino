@@ -18,7 +18,7 @@ import com.google.common.collect.Sets;
 import io.airlift.units.Duration;
 import io.trino.client.Column;
 import io.trino.client.QueryError;
-import io.trino.execution.QueryStats;
+import io.trino.server.BasicQueryStats;
 import io.trino.server.ui.query.editor.output.PersistentJobOutput;
 import org.joda.time.DateTime;
 
@@ -165,7 +165,7 @@ public class Job
         return output;
     }
 
-    public void setQueryStats(QueryStats queryStats)
+    public void setQueryStats(BasicQueryStats queryStats)
     {
         this.queryStats = new JobQueryStats(queryStats.getCreateTime(),
                 queryStats.getElapsedTime(),

@@ -143,6 +143,11 @@ public final class ProtocolUtil
         throw new IllegalArgumentException("Unsupported data type: " + type.getClass().getName());
     }
 
+    public static ClientTypeSignature toClientTypeSignature(TypeSignature signature)
+    {
+        return toClientTypeSignature(signature, true);
+    }
+
     private static ClientTypeSignature toClientTypeSignature(TypeSignature signature, boolean supportsParametricDateTime)
     {
         if (!supportsParametricDateTime) {

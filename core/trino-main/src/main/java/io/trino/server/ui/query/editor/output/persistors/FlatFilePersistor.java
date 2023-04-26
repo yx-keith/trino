@@ -51,14 +51,11 @@ public class FlatFilePersistor
     public URI persist(JobOutputBuilder outputBuilder, Job job)
     {
         File file = outputBuilder.build();
-
         try {
             fileStore.addFile(file.getName(), job.getUser(), file);
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             LOG.error("Caught error adding file to local store", e);
         }
-
-        return URI.create(format("../api/files/%s", file.getName()));
+        return URI.create(format("./%s", file.getName()));
     }
 }

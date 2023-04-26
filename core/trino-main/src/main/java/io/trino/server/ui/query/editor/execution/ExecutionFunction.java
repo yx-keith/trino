@@ -13,31 +13,13 @@
  */
 package io.trino.server.ui.query.editor.execution;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import io.trino.server.BasicQueryStats;
-
 /**
  * @author yaoxiao
  * @version 1.0
- * @date 2023/2/10 14:06
+ * @date 2023/2/22 10:37
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class UIBasicQueryInfo
+@FunctionalInterface
+public interface ExecutionFunction<T, R>
 {
-    private final BasicQueryStats basicQueryStats;
-
-    @JsonCreator
-    public UIBasicQueryInfo(
-            @JsonProperty("basicQueryStats") BasicQueryStats basicQueryStats)
-    {
-        this.basicQueryStats = basicQueryStats;
-    }
-
-    @JsonProperty
-    public BasicQueryStats getBasicQueryStats()
-    {
-        return basicQueryStats;
-    }
+    R apply(T t);
 }

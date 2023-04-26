@@ -13,6 +13,7 @@
  */
 package io.trino.server.ui.query.editor.resoures;
 
+import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import io.trino.security.AccessControl;
 import io.trino.security.AccessControlUtil;
@@ -20,7 +21,7 @@ import io.trino.server.HttpRequestSessionContextFactory;
 import io.trino.server.ProtocolConfig;
 import io.trino.server.SessionContext;
 import io.trino.server.security.ResourceSecurity;
-import io.trino.server.ui.query.editor.QueryEditorConfig;
+import io.trino.server.ui.query.editor.TelePalConfig;
 import io.trino.server.ui.query.editor.execution.ExecutionClient;
 import io.trino.server.ui.query.editor.protocol.ExecutionRequest;
 import io.trino.server.ui.query.editor.protocol.ExecutionSimpleRequest;
@@ -47,21 +48,21 @@ import static java.util.Objects.requireNonNull;
  * @date 2022/12/18 22:22
  */
 
-@Path("/api")
-public class UIExecuteResource
+@Path("/api/execute")
+public class ExecuteResource
 {
     private final ExecutionClient client;
-    private final QueryEditorConfig config;
+    private final TelePalConfig config;
     private final AccessControl accessControl;
     private final HttpRequestSessionContextFactory sessionContextFactory;
     private final Optional<String> alternateHeaderName;
 
     @Inject
-    public UIExecuteResource(HttpRequestSessionContextFactory sessionContextFactory,
-                             ExecutionClient client,
-                             QueryEditorConfig config,
-                             AccessControl accessControl,
-                             ProtocolConfig protocolConfig)
+    public ExecuteResource(HttpRequestSessionContextFactory sessionContextFactory,
+                           ExecutionClient client,
+                           TelePalConfig config,
+                           AccessControl accessControl,
+                           ProtocolConfig protocolConfig)
     {
         this.sessionContextFactory = requireNonNull(sessionContextFactory, "sessionContextFactory is null");
         this.client = client;
@@ -71,8 +72,45 @@ public class UIExecuteResource
     }
 
     @ResourceSecurity(PUBLIC)
-    @PUT
-    @Path("execute")
+    @POST
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response execute(ExecutionSimpleRequest request)
+    {
+        String user = request.getUser();
+        if(user != null) {
+            List<UUID> uuids = client.runQuery(request.getQuery(),
+                    request.getUser(),
+                    request.getDefaultCatalog(),
+                    request.getDefaultSchema(),
+                    Duration.millis(config.getExecutionTimeout().toMillis()));
+            List<ExecutionSuccess> successList = uuids.stream().map(ExecutionSuccess::new).collect(Collectors.toList());
+            return Response.ok(successList).build();
+        }
+
+        return Response.status(Response.Status.NOT_FOUND)
+                .entity(new ExecutionError("Currently not able to execute"))
+                .build();
+    }
+
+    @ResourceSecurity(PUBLIC)
+    @DELETE
+    @Path("queries/{uuid}")
+    public Response cancelQuery(@PathParam("uuid") UUID uuid,
+                                @PathParam("user") String user)
+    {
+        boolean success = client.cancelQuery(user, uuid);
+        if (success) {
+            return Response.ok(ImmutableList.of()).build();
+        }
+        else {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+    }
+
+    @ResourceSecurity(PUBLIC)
+    @POST
+    @Path("v2")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     public Response execute(ExecutionRequest request,
@@ -98,17 +136,5 @@ public class UIExecuteResource
         return Response.status(Response.Status.NOT_FOUND)
                 .entity(new ExecutionError("Currently not able to execute"))
                 .build();
-    }
-
-    @ResourceSecurity(PUBLIC)
-    @POST
-    @Path("execute/simple")
-    @Produces(MediaType.APPLICATION_JSON)
-    @Consumes(MediaType.APPLICATION_JSON)
-    public Response execute(ExecutionSimpleRequest request)
-    {
-        List<UUID> uuids = client.runQuery(request.getQuery(), request.getUser(), request.getDefaultCatalog(), request.getDefaultSchema(), Duration.millis(config.getExecutionTimeout().toMillis()));
-        List<ExecutionSuccess> successList = uuids.stream().map(ExecutionSuccess::new).collect(Collectors.toList());
-        return Response.ok(successList).build();
     }
 }

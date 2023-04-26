@@ -47,8 +47,7 @@ public class ExpiringFileStore
                     if (f != null && f.exists()) {
                         f.delete();
                     }
-                }).build(new CacheLoader<String, FileWithMetadata>()
-                {
+                }).build(new CacheLoader<String, FileWithMetadata>() {
                     @Override
                     public FileWithMetadata load(String key) throws Exception
                     {

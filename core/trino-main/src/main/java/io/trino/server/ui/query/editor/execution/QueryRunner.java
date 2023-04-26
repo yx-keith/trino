@@ -18,10 +18,8 @@ import io.trino.client.StatementClient;
 import okhttp3.OkHttpClient;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static io.trino.client.StatementClientFactory.newStatementClient;
 import static java.util.Objects.requireNonNull;

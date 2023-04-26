@@ -23,11 +23,17 @@ import io.trino.server.ui.query.editor.execution.ClientSessionFactory;
 import io.trino.server.ui.query.editor.execution.ExecutionClient;
 import io.trino.server.ui.query.editor.execution.QueryInfoClient;
 import io.trino.server.ui.query.editor.execution.QueryRunner.QueryRunnerFactory;
+import io.trino.server.ui.query.editor.metadata.ColumnCache;
+import io.trino.server.ui.query.editor.metadata.PreviewTableCache;
+import io.trino.server.ui.query.editor.metadata.SchemaCache;
 import io.trino.server.ui.query.editor.output.PersistentJobOutputFactory;
 import io.trino.server.ui.query.editor.output.builds.OutputBuilderFactory;
 import io.trino.server.ui.query.editor.output.persistors.CSVPersistorFactory;
 import io.trino.server.ui.query.editor.output.persistors.PersistorFactory;
-import io.trino.server.ui.query.editor.resoures.UIExecuteResource;
+import io.trino.server.ui.query.editor.resoures.ExecuteResource;
+import io.trino.server.ui.query.editor.resoures.FilesResource;
+import io.trino.server.ui.query.editor.resoures.MetadataResource;
+import io.trino.server.ui.query.editor.resoures.ResultsPreviewResource;
 import io.trino.server.ui.query.editor.store.files.ExpiringFileStore;
 import okhttp3.OkHttpClient;
 
@@ -57,12 +63,19 @@ public class QueryEditorModule
     @Override
     protected void setup(Binder binder)
     {
-        configBinder(binder).bindConfig(QueryEditorConfig.class);
-        jaxrsBinder(binder).bind(UIExecuteResource.class);
+        configBinder(binder).bindConfig(TelePalConfig.class);
+        jaxrsBinder(binder).bind(ExecuteResource.class);
+        jaxrsBinder(binder).bind(FilesResource.class);
+        jaxrsBinder(binder).bind(ResultsPreviewResource.class);
+        jaxrsBinder(binder).bind(MetadataResource.class);
+
+        binder.bind(ColumnCache.class).in(Scopes.SINGLETON);
+        binder.bind(SchemaCache.class).in(Scopes.SINGLETON);
+        binder.bind(PreviewTableCache.class).in(Scopes.SINGLETON);
         binder.bind(ExecutionClient.class).in(Scopes.SINGLETON);
         binder.bind(PersistentJobOutputFactory.class).in(Scopes.SINGLETON);
-        httpClientBinder(binder).bindHttpClient("query-info", ForQueryInfoClient.class)
-                .withConfigDefaults(HTTP_CLIENT_CONFIG_DEFAULTS);
+        httpClientBinder(binder).bindHttpClient("query-info-client", ForQueryInfoClient.class)
+                .withTracing();
     }
 
     @Singleton
@@ -77,7 +90,7 @@ public class QueryEditorModule
 
     @Named("coordinator-uri")
     @Provides
-    public URI provideCoordinatorURI(HttpServerConfig httpConfig, QueryEditorConfig queryEditorConfig)
+    public URI provideCoordinatorURI(HttpServerConfig httpConfig, TelePalConfig queryEditorConfig)
     {
         if (queryEditorConfig.isRunningEmbeded()) {
             return URI.create("http://localhost:" + httpConfig.getHttpPort());
@@ -107,9 +120,9 @@ public class QueryEditorModule
     }
 
     @Provides
-    public QueryInfoClient provideQueryInfoClient(OkHttpClient httpClient)
+    public QueryInfoClient provideQueryInfoClient(OkHttpClient okHttpClient)
     {
-        return new QueryInfoClient(httpClient);
+        return new QueryInfoClient(okHttpClient);
     }
 
     @Provides
@@ -119,14 +132,14 @@ public class QueryEditorModule
     }
 
     @Provides
-    public OutputBuilderFactory provideOutputBuilder(QueryEditorConfig config)
+    public OutputBuilderFactory provideOutputBuilder(TelePalConfig config)
     {
-        return new OutputBuilderFactory(config.getMaxFileSize().toBytes(), false);
+        return new OutputBuilderFactory(config.getResultPath(), config.getMaxFileSize().toBytes(), false);
     }
 
     @Provides
     @Singleton
-    public ExpiringFileStore provideExpiringFileStore(QueryEditorConfig config)
+    public ExpiringFileStore provideExpiringFileStore(TelePalConfig config)
     {
         return new ExpiringFileStore(config.getMaxResultCount());
     }

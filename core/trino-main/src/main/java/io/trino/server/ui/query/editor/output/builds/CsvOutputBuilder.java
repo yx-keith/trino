@@ -13,10 +13,10 @@
  */
 package io.trino.server.ui.query.editor.output.builds;
 
-import au.com.bytecode.opencsv.CSVWriter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.common.collect.Lists;
 import com.google.common.io.CountingOutputStream;
+import com.opencsv.CSVWriter;
 import io.airlift.log.Logger;
 import io.trino.client.Column;
 
@@ -37,9 +37,7 @@ public class CsvOutputBuilder
         implements JobOutputBuilder
 {
     private static final Logger LOG = Logger.get(CsvOutputBuilder.class);
-
     private static final String FILE_SUFFIX = ".csv";
-
     @JsonIgnore
     private final File outputFile;
     @JsonIgnore
@@ -55,18 +53,17 @@ public class CsvOutputBuilder
     @JsonIgnore
     private final UUID jobUUID;
 
-    public CsvOutputBuilder(boolean includeHeader, UUID jobUUID, long maxFileSizeBytes, boolean compressedOutput) throws IOException
+    public CsvOutputBuilder(String resultPath, boolean includeHeader, UUID jobUUID, long maxFileSizeBytes, boolean compressedOutput) throws IOException
     {
         this.includeHeader = includeHeader;
         this.jobUUID = jobUUID;
-        this.outputFile = File.createTempFile(jobUUID.toString(), FILE_SUFFIX);
+        this.outputFile = File.createTempFile(jobUUID.toString(), FILE_SUFFIX, new File(resultPath));
         this.maxFileSizeBytes = maxFileSizeBytes;
         this.countingOutputStream = new CountingOutputStream(new FileOutputStream(this.outputFile));
         OutputStreamWriter writer;
         if (compressedOutput) {
             writer = new OutputStreamWriter(new GZIPOutputStream(this.countingOutputStream));
-        }
-        else {
+        } else {
             writer = new OutputStreamWriter(this.countingOutputStream);
         }
         this.csvWriter = new CSVWriter(writer);
@@ -90,8 +87,7 @@ public class CsvOutputBuilder
                     sb.append(hex);
                 }
                 values[i] = sb.toString();
-            }
-            else {
+            } else {
                 final Object value = row.get(i);
                 values[i] = (value == null) ? "" : value.toString();
             }
@@ -124,11 +120,9 @@ public class CsvOutputBuilder
         if (countingOutputStream.getCount() > maxFileSizeBytes) {
             try {
                 csvWriter.close();
-            }
-            catch (IOException e) {
+            } catch (IOException e) {
                 LOG.error("Caught exception closing csv writer", e);
             }
-
             delete();
             throw new FileTooLargeException();
         }
@@ -139,8 +133,7 @@ public class CsvOutputBuilder
     {
         try {
             csvWriter.close();
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
 

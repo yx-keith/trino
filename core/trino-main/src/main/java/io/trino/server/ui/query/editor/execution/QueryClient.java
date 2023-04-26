@@ -20,7 +20,6 @@ import io.trino.client.StatementClient;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 
 /**
  * @author yaoxiao
@@ -51,7 +50,7 @@ public class QueryClient
         this.query = query;
     }
 
-    public <T> T executeWith(Function<StatementClient, T> function)
+    public <T> T executeWith(ExecutionFunction<StatementClient, T> function)
             throws QueryTimeOutException
     {
         final Stopwatch stopwatch = Stopwatch.createStarted();

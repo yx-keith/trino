@@ -157,7 +157,8 @@ public class ExecutionClient
                 queryInfoClient,
                 authorizer,
                 timeout,
-                outputBuilderFactory);
+                outputBuilderFactory,
+                persistorFactory);
 
         executionMap.put(job.getUuid(), execution);
 
@@ -247,6 +248,21 @@ public class ExecutionClient
     {
         job.setQueryFinished(new DateTime());
         executionMap.remove(job.getUuid());
+    }
+
+    public boolean cancelQuery(
+            String user,
+            UUID uuid)
+    {
+        Execution execution = executionMap.get(uuid);
+
+        if ((execution != null) && (execution.getJob().getUser().equals(user))) {
+            execution.cancel();
+            return true;
+        }
+        else {
+            return false;
+        }
     }
 
     public static class ExecutionFailureException

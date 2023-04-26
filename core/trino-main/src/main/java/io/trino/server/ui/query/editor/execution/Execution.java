@@ -19,18 +19,18 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.RateLimiter;
 import io.airlift.units.DataSize;
 import io.trino.client.*;
-import io.trino.execution.QueryStats;
-import io.trino.server.DynamicFilterService;
+import io.trino.server.BasicQueryStats;
 import io.trino.server.ui.query.editor.execution.ExecutionClient.ExecutionFailureException;
 import io.trino.server.ui.query.editor.execution.QueryClient.QueryTimeOutException;
 import io.trino.server.ui.query.editor.output.builds.FileTooLargeException;
 import io.trino.server.ui.query.editor.output.builds.JobOutputBuilder;
 import io.trino.server.ui.query.editor.output.builds.OutputBuilderFactory;
+import io.trino.server.ui.query.editor.output.persistors.Persistor;
+import io.trino.server.ui.query.editor.output.persistors.PersistorFactory;
 import io.trino.server.ui.query.editor.protocol.Job;
 import io.trino.server.ui.query.editor.protocol.JobSessionContext;
 import io.trino.server.ui.query.editor.protocol.JobState;
 import io.trino.server.ui.query.editor.protocol.Table;
-import io.trino.sql.parser.ParsingException;
 import org.joda.time.DateTime;
 import org.joda.time.Duration;
 
@@ -50,18 +50,22 @@ import static java.lang.String.format;
 public class Execution
         implements Callable<Job>
 {
+    static final Splitter QUERY_SPLITTER = Splitter.on(";").omitEmptyStrings().trimResults();
     private final Job job;
     private final QueryRunner queryRunner;
     private final QueryInfoClient queryInfoClient;
     private final QueryExecutionAuthorizer authorizer;
     private final Duration timeout;
     private final OutputBuilderFactory outputBuilderFactory;
+    private final PersistorFactory persistorFactory;
+
     private final RateLimiter updateLimiter = RateLimiter.create(2.0);
     private final int maxRowsPreviewOutput = 1_000;
     private boolean isCancelled;
 
     public Execution(Job job, QueryRunner queryRunner, QueryInfoClient queryInfoClient,
-                     QueryExecutionAuthorizer authorizer, Duration timeout, OutputBuilderFactory outputBuilderFactory)
+                     QueryExecutionAuthorizer authorizer, Duration timeout, OutputBuilderFactory outputBuilderFactory,
+                     PersistorFactory persistorFactory)
     {
         this.job = job;
         this.queryRunner = queryRunner;
@@ -69,6 +73,7 @@ public class Execution
         this.authorizer = authorizer;
         this.timeout = timeout;
         this.outputBuilderFactory = outputBuilderFactory;
+        this.persistorFactory = persistorFactory;
     }
 
     public void cancel()
@@ -86,10 +91,10 @@ public class Execution
             throws ExecutionFailureException
     {
         final String userQuery = QUERY_SPLITTER.splitToList(getJob().getQuery()).get(0);
-//        final JobOutputBuilder outputBuilder;
+        final JobOutputBuilder outputBuilder;
         job.setQueryStats(createNoOpQueryStats());
 
-    /*    try {
+        try {
             outputBuilder = outputBuilderFactory.forJob(job);
         }
         catch (IOException e) {
@@ -97,20 +102,10 @@ public class Execution
         }
         catch (InvalidQueryException e) {
             throw new ExecutionFailureException(job, e.getMessage(), e);
-        }*/
-
+        }
+        final Persistor persistor = persistorFactory.getPersistor(job, job.getOutput());
         final String query = job.getOutput().processQuery(userQuery);
         final Set<Table> tables = new HashSet<>();
-
-        try {
-            tables.addAll(authorizer.tablesUsedByQuery(query));
-        }
-        catch (ParsingException e) {
-            job.setError(new QueryError(e.getMessage(), null, -1, null, null,
-                    new ErrorLocation(e.getLineNumber(), e.getColumnNumber()), null));
-
-            throw new ExecutionFailureException(job, "Invalid query, could not parse", e);
-        }
 
         if (!authorizer.isAuthorizedRead(tables)) {
             job.setQueryStats(createNoOpQueryStats());
@@ -132,12 +127,10 @@ public class Execution
                 List<Column> resultColumns = null;
                 JobState jobState = null;
                 QueryError queryError = null;
-                QueryStats queryStats = null;
+                BasicQueryStats queryStats = null;
 
                 if (isCancelled) {
-                    throw new ExecutionFailureException(job,
-                            "Query was cancelled",
-                            null);
+                    throw new ExecutionFailureException(job, "Query was cancelled", null);
                 }
 
                 if (statusInfo.getError() != null) {
@@ -148,9 +141,8 @@ public class Execution
                 if ((statusInfo.getInfoUri() != null) && (jobState != JobState.FAILED)) {
                     //获取query在服务端执行的状态及信息,UIBasicQueryInfo接口可扩展,参考io.trino.execution.QueryInfo
                     UIBasicQueryInfo queryInfo = queryInfoClient.getQueryInfo(statusInfo.getInfoUri(), statusInfo.getId());
-
                     if (queryInfo != null) {
-                        queryStats = queryInfo.getQueryStats();
+                        queryStats = queryInfo.getBasicQueryStats();
                     }
                 }
 
@@ -166,7 +158,7 @@ public class Execution
                     jobState = JobState.fromStatementState(statusInfo.getStats().getState());
                 }
 
-/*                try {
+                try {
                     if (statusInfo.getColumns() != null) {
                         resultColumns = statusInfo.getColumns();
                         outputBuilder.addColumns(resultColumns);
@@ -174,23 +166,17 @@ public class Execution
 
                     if (data.getData() != null) {
                         List<List<Object>> resultsData = ImmutableList.copyOf(data.getData());
-
                         for (List<Object> row : resultsData) {
                             outputBuilder.addRow(row);
                         }
                     }
+                } catch (FileTooLargeException e) {
+                    throw new ExecutionFailureException(job, "Output file exceeded maximum configured filesize", e);
                 }
-                catch (FileTooLargeException e) {
-                    throw new ExecutionFailureException(job,
-                            "Output file exceeded maximum configured filesize",
-                            e);
-                }*/
-
                 updateJobInfo(tables, resultColumns, queryStats, jobState, queryError);
                 return null;
             });
-        }
-        catch (QueryTimeOutException e) {
+        } catch (QueryTimeOutException e) {
             throw new ExecutionFailureException(job,
                     format("Query exceeded maximum execution time of %s minutes", Duration.millis(e.getElapsedMs()).getStandardMinutes()),
                     e);
@@ -204,16 +190,20 @@ public class Execution
                 updateJobInfo(
                         null,
                         null,
-                        queryInfo.getQueryStats(),
+                        queryInfo.getBasicQueryStats(),
                         JobState.fromStatementState(finalResults.getStats().getState()),
                         finalResults.getError());
             }
         }
 
-        else {
+        if (job.getState() != JobState.FAILED) {
+            URI location = persistor.persist(outputBuilder, job);
+            if (location != null) {
+                job.getOutput().setLocation(location);
+            }
+        } else {
             throw new ExecutionFailureException(job, null, null);
         }
-
         return getJob();
     }
 
@@ -221,31 +211,10 @@ public class Execution
     {
         return job;
     }
-
-    static final Splitter QUERY_SPLITTER = Splitter.on(";").omitEmptyStrings().trimResults();
-
-    /**
-     * Rate Limited updateJobInfo
-     */
-    protected void rlUpdateJobInfo(
-            Set<Table> usedTables,
-            List<Column> columns,
-            QueryStats queryStats,
-            JobState state,
-            QueryError error)
-    {
-        if (updateLimiter.tryAcquire(1)) {
-            updateJobInfo(usedTables, columns, queryStats, state, error);
-        }
-        else {
-            updateJobInfo(usedTables, columns, queryStats, state, error);
-        }
-    }
-
     protected void updateJobInfo(
             Set<Table> usedTables,
             List<Column> columns,
-            QueryStats queryStats,
+            BasicQueryStats queryStats,
             JobState state,
             QueryError error)
     {
@@ -287,21 +256,14 @@ public class Execution
         }
     }
 
-    public static QueryStats createNoOpQueryStats()
+    public static BasicQueryStats createNoOpQueryStats()
     {
         DateTime now = DateTime.now();
         io.airlift.units.Duration zeroDuration = new io.airlift.units.Duration(0, TimeUnit.SECONDS);
 
-        return new QueryStats(
+        return new BasicQueryStats(
                 now,
                 now,
-                now,
-                now,
-                zeroDuration,
-                zeroDuration,
-                zeroDuration,
-                zeroDuration,
-                zeroDuration,
                 zeroDuration,
                 zeroDuration,
                 zeroDuration,
@@ -310,59 +272,21 @@ public class Execution
                 0,
                 0,
                 0,
-                0,
-                0,
-                0,
-                0,
-                0,
+                DataSize.ofBytes(0),
                 0,
                 DataSize.ofBytes(0),
+                0,
+                0,
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
-                DataSize.ofBytes(0),
-                DataSize.ofBytes(0),
-                DataSize.ofBytes(0),
-                DataSize.ofBytes(0),
-                false,
-                zeroDuration,
                 zeroDuration,
                 zeroDuration,
                 zeroDuration,
                 zeroDuration,
                 false,
                 ImmutableSet.of(),
-                DataSize.ofBytes(0),
-                DataSize.ofBytes(0),
-                0,
-                0,
-                zeroDuration,
-                zeroDuration,
-                DataSize.ofBytes(0),
-                DataSize.ofBytes(0),
-                0,
-                0,
-                DataSize.ofBytes(0),
-                DataSize.ofBytes(0),
-                0,
-                0,
-                DataSize.ofBytes(0),
-                DataSize.ofBytes(0),
-                0,
-                0,
-                zeroDuration,
-                zeroDuration,
-                DataSize.ofBytes(0),
-                DataSize.ofBytes(0),
-                0,
-                0,
-                zeroDuration,
-                zeroDuration,
-                DataSize.ofBytes(0),
-                DataSize.ofBytes(0),
-                ImmutableList.of(),
-                DynamicFilterService.DynamicFiltersStats.EMPTY,
-                ImmutableList.of());
+                OptionalDouble.empty());
     }
 }

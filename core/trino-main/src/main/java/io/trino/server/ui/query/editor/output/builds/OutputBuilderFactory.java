@@ -30,11 +30,13 @@ public class OutputBuilderFactory
 {
     private final long maxFileSizeBytes;
     private final boolean isCompressedOutput;
+    private final String resultPath;
 
-    public OutputBuilderFactory(long maxFileSizeBytes, boolean isCompressedOutput)
+    public OutputBuilderFactory(String resultPath, long maxFileSizeBytes, boolean isCompressedOutput)
     {
         this.maxFileSizeBytes = maxFileSizeBytes;
         this.isCompressedOutput = isCompressedOutput;
+        this.resultPath = resultPath;
     }
 
     public JobOutputBuilder forJob(Job job)
@@ -43,7 +45,7 @@ public class OutputBuilderFactory
         PersistentJobOutput output = job.getOutput();
         switch (output.getType()) {
             case "csv":
-                return new CsvOutputBuilder(true, job.getUuid(), maxFileSizeBytes, isCompressedOutput);
+                return new CsvOutputBuilder(resultPath, true, job.getUuid(), maxFileSizeBytes, isCompressedOutput);
             default:
                 throw new IllegalArgumentException(format("OutputBuilder for type %s not found", output.getType()));
         }
