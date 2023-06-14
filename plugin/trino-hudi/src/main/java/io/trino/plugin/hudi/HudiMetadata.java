@@ -101,7 +101,7 @@ public class HudiMetadata
         if (isHiveSystemSchema(tableName.getSchemaName())) {
             return null;
         }
-        Optional<Table> table = metastore.getTable(tableName.getSchemaName(), tableName.getTableName());
+        Optional<Table> table = metastore.getTable(session, tableName.getSchemaName(), tableName.getTableName());
         if (table.isEmpty()) {
             return null;
         }
@@ -121,7 +121,7 @@ public class HudiMetadata
     public ConnectorTableMetadata getTableMetadata(ConnectorSession session, ConnectorTableHandle table)
     {
         HudiTableHandle hudiTableHandle = (HudiTableHandle) table;
-        return getTableMetadata(hudiTableHandle.getSchemaTableName(), getColumnsToHide(session));
+        return getTableMetadata(session, hudiTableHandle.getSchemaTableName(), getColumnsToHide(session));
     }
 
     @Override
@@ -148,7 +148,7 @@ public class HudiMetadata
     public Map<String, ColumnHandle> getColumnHandles(ConnectorSession session, ConnectorTableHandle tableHandle)
     {
         HudiTableHandle hudiTableHandle = (HudiTableHandle) tableHandle;
-        Table table = metastore.getTable(hudiTableHandle.getSchemaName(), hudiTableHandle.getTableName())
+        Table table = metastore.getTable(session, hudiTableHandle.getSchemaName(), hudiTableHandle.getTableName())
                 .orElseThrow(() -> new TableNotFoundException(schemaTableName(hudiTableHandle.getSchemaName(), hudiTableHandle.getTableName())));
         return hiveColumnHandles(table, typeManager, NANOSECONDS).stream()
                 .collect(toImmutableMap(HiveColumnHandle::getName, identity()));
@@ -218,7 +218,7 @@ public class HudiMetadata
     private Optional<TableColumnsMetadata> getTableColumnMetadata(ConnectorSession session, SchemaTableName table)
     {
         try {
-            List<ColumnMetadata> columns = getTableMetadata(table, getColumnsToHide(session)).getColumns();
+            List<ColumnMetadata> columns = getTableMetadata(session, table, getColumnsToHide(session)).getColumns();
             return Optional.of(TableColumnsMetadata.forTable(table, columns));
         }
         catch (TableNotFoundException ignored) {
@@ -226,9 +226,9 @@ public class HudiMetadata
         }
     }
 
-    private ConnectorTableMetadata getTableMetadata(SchemaTableName tableName, Collection<String> columnsToHide)
+    private ConnectorTableMetadata getTableMetadata(ConnectorSession session, SchemaTableName tableName, Collection<String> columnsToHide)
     {
-        Table table = metastore.getTable(tableName.getSchemaName(), tableName.getTableName())
+        Table table = metastore.getTable(session, tableName.getSchemaName(), tableName.getTableName())
                 .orElseThrow(() -> new TableNotFoundException(tableName));
         Function<HiveColumnHandle, ColumnMetadata> metadataGetter = columnMetadataGetter(table);
         List<ColumnMetadata> columns = hiveColumnHandles(table, typeManager, NANOSECONDS).stream()

@@ -90,7 +90,7 @@ public class HudiSplitManager
                 .filter(HiveColumnHandle::isPartitionKey)
                 .collect(toImmutableMap(HiveColumnHandle::getName, identity()));
         HiveMetastore metastore = metastoreProvider.apply(session.getIdentity(), (HiveTransactionHandle) transaction);
-        Table table = metastore.getTable(hudiTableHandle.getSchemaName(), hudiTableHandle.getTableName())
+        Table table = metastore.getTable(session, hudiTableHandle.getSchemaName(), hudiTableHandle.getTableName())
                 .orElseThrow(() -> new TableNotFoundException(schemaTableName(hudiTableHandle.getSchemaName(), hudiTableHandle.getTableName())));
         HudiSplitSource splitSource = new HudiSplitSource(
                 session,
