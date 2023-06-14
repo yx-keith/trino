@@ -23,6 +23,7 @@ import io.trino.plugin.hive.acid.AcidOperation;
 import io.trino.plugin.hive.acid.AcidTransaction;
 import io.trino.plugin.hive.metastore.HivePrivilegeInfo.HivePrivilege;
 import io.trino.spi.TrinoException;
+import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.RoleGrant;
@@ -44,6 +45,11 @@ public interface HiveMetastore
     List<String> getAllDatabases();
 
     Optional<Table> getTable(String databaseName, String tableName);
+
+    default Optional<Table> getTable(ConnectorSession session, String databaseName, String tableName)
+    {
+        return getTable(databaseName, tableName);
+    }
 
     Set<HiveColumnStatisticType> getSupportedColumnStatistics(Type type);
 

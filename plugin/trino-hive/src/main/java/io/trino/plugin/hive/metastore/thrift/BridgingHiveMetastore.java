@@ -13,20 +13,20 @@
  */
 package io.trino.plugin.hive.metastore.thrift;
 
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
 import io.trino.hive.thrift.metastore.DataOperationType;
 import io.trino.hive.thrift.metastore.FieldSchema;
+import com.google.common.util.concurrent.UncheckedExecutionException;
+import io.trino.collect.cache.EvictableCacheBuilder;
 import io.trino.plugin.hive.HiveColumnStatisticType;
 import io.trino.plugin.hive.HivePartition;
 import io.trino.plugin.hive.HiveType;
 import io.trino.plugin.hive.PartitionStatistics;
 import io.trino.plugin.hive.acid.AcidOperation;
 import io.trino.plugin.hive.acid.AcidTransaction;
-import io.trino.plugin.hive.metastore.AcidTransactionOwner;
-import io.trino.plugin.hive.metastore.Database;
-import io.trino.plugin.hive.metastore.HiveMetastore;
-import io.trino.plugin.hive.metastore.HivePrincipal;
-import io.trino.plugin.hive.metastore.HivePrivilegeInfo;
+import io.trino.plugin.hive.metastore.*;
 import io.trino.plugin.hive.metastore.HivePrivilegeInfo.HivePrivilege;
 import io.trino.plugin.hive.metastore.Partition;
 import io.trino.plugin.hive.metastore.PartitionWithStatistics;
@@ -34,6 +34,7 @@ import io.trino.plugin.hive.metastore.PrincipalPrivileges;
 import io.trino.plugin.hive.metastore.Table;
 import io.trino.plugin.hive.util.HiveUtil;
 import io.trino.spi.TrinoException;
+import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.SchemaNotFoundException;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
@@ -49,8 +50,10 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.google.common.base.Throwables.throwIfInstanceOf;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.plugin.hive.HiveMetadata.TABLE_COMMENT;
+import static io.trino.plugin.hive.metastore.QueryHiveTableName.queryHiveTableName;
 import static io.trino.plugin.hive.metastore.MetastoreUtil.isAvroTableWithSchemaSet;
 import static io.trino.plugin.hive.metastore.MetastoreUtil.verifyCanDropColumn;
 import static io.trino.plugin.hive.metastore.thrift.ThriftMetastoreUtil.csvSchemaFields;
@@ -63,12 +66,14 @@ import static io.trino.plugin.hive.metastore.thrift.ThriftMetastoreUtil.toMetast
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.security.PrincipalType.USER;
 import static java.util.Objects.requireNonNull;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.function.UnaryOperator.identity;
 
 public class BridgingHiveMetastore
         implements HiveMetastore
 {
     private final ThriftMetastore delegate;
+    private final LoadingCache<QueryHiveTableName, Optional<Table>> queryTableCache = buildCache(OptionalLong.of(60), 2000, true, this::loadTable);
 
     public BridgingHiveMetastore(ThriftMetastore delegate)
     {
@@ -99,6 +104,17 @@ public class BridgingHiveMetastore
             }
             return fromMetastoreApiTable(table);
         });
+    }
+
+    @Override
+    public Optional<Table> getTable(ConnectorSession session, String databaseName, String tableName)
+    {
+        return get(queryTableCache, queryHiveTableName(session.getQueryId(), databaseName, tableName));
+    }
+
+    private Optional<Table> loadTable(QueryHiveTableName hiveTableName)
+    {
+        return getTable(hiveTableName.getDatabaseName(), hiveTableName.getTableName());
     }
 
     @Override
@@ -556,5 +572,35 @@ public class BridgingHiveMetastore
     public void alterTransactionalTable(Table table, long transactionId, long writeId, PrincipalPrivileges principalPrivileges)
     {
         delegate.alterTransactionalTable(toMetastoreApiTable(table, principalPrivileges), transactionId, writeId);
+    }
+
+    private static <K, V> V get(LoadingCache<K, V> cache, K key)
+    {
+        try {
+            return cache.getUnchecked(key);
+        }
+        catch (UncheckedExecutionException e) {
+            throwIfInstanceOf(e.getCause(), TrinoException.class);
+            throw e;
+        }
+    }
+
+    private static <K, V> LoadingCache<K, V> buildCache(
+            OptionalLong expiresAfterWriteSeconds,
+            long maximumSize,
+            Boolean statsRecording,
+            com.google.common.base.Function<K, V> loader)
+    {
+        CacheLoader<K, V> cacheLoader = CacheLoader.from(loader);
+        EvictableCacheBuilder<Object, Object> cacheBuilder = EvictableCacheBuilder.newBuilder();
+        if (expiresAfterWriteSeconds.isPresent()) {
+            cacheBuilder.expireAfterWrite(expiresAfterWriteSeconds.getAsLong(), SECONDS);
+        }
+        cacheBuilder.maximumSize(maximumSize);
+        if (statsRecording) {
+            cacheBuilder.recordStats();
+        }
+        cacheBuilder.shareNothingWhenDisabled();
+        return cacheBuilder.build(cacheLoader);
     }
 }
