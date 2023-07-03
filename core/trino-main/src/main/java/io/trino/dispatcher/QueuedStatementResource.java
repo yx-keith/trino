@@ -182,6 +182,8 @@ public class QueuedStatementResource
 
         SessionContext sessionContext = sessionContextFactory.createSessionContext(headers, alternateHeaderName, remoteAddress, identity);
         Query query = new Query(statement, sessionContext, dispatchManager, queryInfoUrlFactory);
+        log.audit("queryString: " + statement);
+        log.audit("remoteAddress: " + remoteAddress.orElse(""));
         queryManager.registerQuery(query);
 
         // let authentication filter know that identity lifecycle has been handed off

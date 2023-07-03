@@ -54,10 +54,10 @@ public class AccessControlModule
                 new LoggingInvocationHandler(
                         accessControlManager,
                         new LoggingInvocationHandler.ReflectiveParameterNamesProvider(),
-                        logger::debug));
+                        logger::audit));
 
         return ForwardingAccessControl.of(() -> {
-            if (logger.isDebugEnabled()) {
+            if (logger.isAuditEnabled()) {
                 return loggingInvocationsAccessControl;
             }
             return accessControlManager;
