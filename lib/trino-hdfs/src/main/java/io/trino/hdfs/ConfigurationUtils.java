@@ -13,6 +13,7 @@
  */
 package io.trino.hdfs;
 
+import io.airlift.log.Logger;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
@@ -28,6 +29,7 @@ import static io.trino.hadoop.ConfigurationInstantiator.newEmptyConfiguration;
 public final class ConfigurationUtils
 {
     private static final Configuration INITIAL_CONFIGURATION;
+    private static final Logger log = Logger.get(ConfigurationUtils.class);
 
     static {
         Configuration.addDefaultResource("hdfs-default.xml");
@@ -58,6 +60,16 @@ public final class ConfigurationUtils
     {
         for (Map.Entry<String, String> entry : from) {
             to.set(entry.getKey(), entry.getValue());
+        }
+    }
+
+    public static void customCopy(Configuration from, Configuration to)
+    {
+        for (Map.Entry<String, String> entry : from) {
+            String name = entry.getKey();
+            if (!"io.compression.codec.lzo.class".equalsIgnoreCase(name) && !"io.compression.codecs".equalsIgnoreCase(name)) {
+                to.set(name, entry.getValue());
+            }
         }
     }
 

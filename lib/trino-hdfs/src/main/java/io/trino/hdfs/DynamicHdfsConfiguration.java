@@ -22,8 +22,7 @@ import java.net.URI;
 import java.util.Set;
 
 import static io.trino.hadoop.ConfigurationInstantiator.newEmptyConfiguration;
-import static io.trino.hdfs.ConfigurationUtils.copy;
-import static io.trino.hdfs.ConfigurationUtils.getInitialConfiguration;
+import static io.trino.hdfs.ConfigurationUtils.*;
 import static java.util.Objects.requireNonNull;
 
 public class DynamicHdfsConfiguration
@@ -40,7 +39,9 @@ public class DynamicHdfsConfiguration
             Configuration configuration = newEmptyConfiguration();
             copy(INITIAL_CONFIGURATION, configuration);
             initializer.initializeConfiguration(configuration);
-            return configuration;
+            Configuration finalConfiguration = newEmptyConfiguration();
+            customCopy(configuration, finalConfiguration);
+            return finalConfiguration;
         }
     };
 
