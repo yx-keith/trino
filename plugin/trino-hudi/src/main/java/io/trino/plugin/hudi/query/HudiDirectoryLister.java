@@ -29,5 +29,5 @@ public interface HudiDirectoryLister
 
     List<FileStatus> listStatus(HudiPartitionInfo partitionInfo);
 
-    Map<String, Optional<Partition>> getPartitions(List<String> partitionNames);
+    Map<String, Optional<Partition>> buildPartitionMapBatch(List<String> partitionNames);
 }

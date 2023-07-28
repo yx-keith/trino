@@ -86,7 +86,8 @@ public class HudiSplitSource
                 metaClient,
                 metastore,
                 table,
-                partitionColumnHandles);
+                partitionColumnHandles,
+                session);
 
         this.queue = new ThrottledAsyncQueue<>(maxSplitsPerSecond, maxOutstandingSplits, executor);
         HudiBackgroundSplitLoader splitLoader = new HudiBackgroundSplitLoader(

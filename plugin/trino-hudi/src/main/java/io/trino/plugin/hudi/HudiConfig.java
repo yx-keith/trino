@@ -39,8 +39,8 @@ public class HudiConfig
     private List<String> columnsToHide = ImmutableList.of();
     private boolean metadataEnabled;
     private boolean shouldUseParquetColumnNames = true;
-    private int minPartitionBatchSize = 10;
-    private int maxPartitionBatchSize = 100;
+    private int minPartitionBatchSize = 100;
+    private int maxPartitionBatchSize = 500;
     private boolean sizeBasedSplitWeightsEnabled = true;
     private DataSize standardSplitWeightSize = DataSize.of(128, MEGABYTE);
     private double minimumAssignedSplitWeight = 0.05;

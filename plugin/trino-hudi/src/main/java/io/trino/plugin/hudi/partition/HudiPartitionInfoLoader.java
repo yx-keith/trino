@@ -35,10 +35,7 @@ public class HudiPartitionInfoLoader
         implements Runnable
 {
     private final HudiDirectoryLister hudiDirectoryLister;
-    private final int minPartitionBatchSize;
-    private final int maxPartitionBatchSize;
     private final Deque<HudiPartitionInfo> partitionQueue;
-    private int currentBatchSize;
 
     public HudiPartitionInfoLoader(
             ConnectorSession session,
@@ -46,9 +43,6 @@ public class HudiPartitionInfoLoader
     {
         this.hudiDirectoryLister = hudiDirectoryLister;
         this.partitionQueue = new ConcurrentLinkedDeque<>();
-        this.minPartitionBatchSize = getMinPartitionBatchSize(session);
-        this.maxPartitionBatchSize = getMaxPartitionBatchSize(session);
-        this.currentBatchSize = -1;
     }
 
     @Override
@@ -69,54 +63,11 @@ public class HudiPartitionInfoLoader
             return;
         }
 
-        boolean shouldUseHiveMetastore = hudiPartitionInfoList.get(0) instanceof HiveHudiPartitionInfo;
-        Iterator<HudiPartitionInfo> iterator = hudiPartitionInfoList.iterator();
-        while (iterator.hasNext()) {
-            int batchSize = updateBatchSize();
-            List<HudiPartitionInfo> partitionInfoBatch = new ArrayList<>();
-            while (iterator.hasNext() && batchSize > 0) {
-                partitionInfoBatch.add(iterator.next());
-                batchSize--;
-            }
-
-            if (!partitionInfoBatch.isEmpty()) {
-                if (shouldUseHiveMetastore) {
-                    Map<String, Optional<Partition>> partitions = hudiDirectoryLister.getPartitions(partitionInfoBatch.stream()
-                            .map(HudiPartitionInfo::getHivePartitionName)
-                            .collect(Collectors.toList()));
-                    for (HudiPartitionInfo partitionInfo : partitionInfoBatch) {
-                        String hivePartitionName = partitionInfo.getHivePartitionName();
-                        if (!partitions.containsKey(hivePartitionName)) {
-                            throw new HoodieIOException("Partition does not exist: " + hivePartitionName);
-                        }
-                        partitionInfo.loadPartitionInfo(partitions.get(hivePartitionName));
-                        partitionQueue.add(partitionInfo);
-                    }
-                }
-                else {
-                    for (HudiPartitionInfo partitionInfo : partitionInfoBatch) {
-                        partitionInfo.getHivePartitionKeys();
-                        partitionQueue.add(partitionInfo);
-                    }
-                }
-            }
-        }
+        partitionQueue.addAll(hudiPartitionInfoList);
     }
 
     public Deque<HudiPartitionInfo> getPartitionQueue()
     {
         return partitionQueue;
-    }
-
-    private int updateBatchSize()
-    {
-        if (currentBatchSize <= 0) {
-            currentBatchSize = minPartitionBatchSize;
-        }
-        else {
-            currentBatchSize *= 2;
-            currentBatchSize = Math.min(currentBatchSize, maxPartitionBatchSize);
-        }
-        return currentBatchSize;
     }
 }

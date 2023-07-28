@@ -22,6 +22,7 @@ import io.trino.plugin.hive.metastore.Table;
 import io.trino.plugin.hudi.HudiTableHandle;
 import io.trino.plugin.hudi.partition.HiveHudiPartitionInfo;
 import io.trino.plugin.hudi.partition.HudiPartitionInfo;
+import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
 import io.trino.spi.predicate.TupleDomain;
@@ -32,13 +33,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static io.trino.plugin.hudi.HudiSessionProperties.getMaxPartitionBatchSize;
+import static io.trino.plugin.hudi.HudiSessionProperties.getMinPartitionBatchSize;
 import static io.trino.plugin.hudi.HudiUtil.getFileStatus;
 
 public class HudiReadOptimizedDirectoryLister
@@ -54,6 +55,9 @@ public class HudiReadOptimizedDirectoryLister
     private final List<Column> partitionColumns;
 
     private List<String> hivePartitionNames;
+    private final int minPartitionBatchSize;
+    private final int maxPartitionBatchSize;
+    private int currentBatchSize;
 
     public HudiReadOptimizedDirectoryLister(
             HoodieMetadataConfig metadataConfig,
@@ -62,7 +66,8 @@ public class HudiReadOptimizedDirectoryLister
             HoodieTableMetaClient metaClient,
             HiveMetastore hiveMetastore,
             Table hiveTable,
-            List<HiveColumnHandle> partitionColumnHandles)
+            List<HiveColumnHandle> partitionColumnHandles,
+            ConnectorSession session)
     {
         this.tableHandle = tableHandle;
         this.tableName = tableHandle.getSchemaTableName();
@@ -72,6 +77,9 @@ public class HudiReadOptimizedDirectoryLister
         this.fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(engineContext, metaClient, metadataConfig);
         this.partitionKeysFilter = MetastoreUtil.computePartitionKeyFilter(partitionColumnHandles, tableHandle.getPartitionPredicates());
         this.partitionColumns = hiveTable.getPartitionColumns();
+        this.minPartitionBatchSize = getMinPartitionBatchSize(session);
+        this.maxPartitionBatchSize = getMaxPartitionBatchSize(session);
+        this.currentBatchSize = -1;
     }
 
     @Override
@@ -82,6 +90,7 @@ public class HudiReadOptimizedDirectoryLister
                     ? Collections.singletonList("")
                     : getPartitionNamesFromHiveMetastore(partitionKeysFilter);
         }
+        Map<String, Optional<Partition>> partitionNameToPartitionMap = buildPartitionMapBatch(hivePartitionNames);
 
         List<HudiPartitionInfo> allPartitionInfoList = hivePartitionNames.stream()
                 .map(hivePartitionName -> new HiveHudiPartitionInfo(
@@ -94,8 +103,13 @@ public class HudiReadOptimizedDirectoryLister
                 .collect(Collectors.toList());
 
         return allPartitionInfoList.stream()
-                .filter(partitionInfo -> partitionInfo.getHivePartitionKeys().isEmpty() || partitionInfo.doesMatchPredicates())
+                .filter(partitionInfo -> {
+                    String partitionName = partitionInfo.getHivePartitionName();
+                    Optional<Partition> optionalPartition = partitionNameToPartitionMap.get(partitionName);
+                    return partitionInfo.getHivePartitionKeysFromPartition(optionalPartition).isEmpty() || partitionInfo.doesMatchPredicates();
+                })
                 .collect(Collectors.toList());
+
     }
 
     @Override
@@ -116,9 +130,20 @@ public class HudiReadOptimizedDirectoryLister
     }
 
     @Override
-    public Map<String, Optional<Partition>> getPartitions(List<String> partitionNames)
+    public Map<String, Optional<Partition>> buildPartitionMapBatch(List<String> partitionNames)
     {
-        return hiveMetastore.getPartitionsByNames(hiveTable, partitionNames);
+        Map<String, Optional<Partition>> partitionNameToPartitionMap = new ConcurrentHashMap<>();
+        Iterator<String> iterator = partitionNames.iterator();
+        while (iterator.hasNext()) {
+            List<String> partitionNamesBatch = new ArrayList<>();
+            int batchSize = updateBatchSize();
+            while (iterator.hasNext() && batchSize > 0) {
+                partitionNamesBatch.add(iterator.next());
+                batchSize--;
+            }
+            partitionNameToPartitionMap.putAll(hiveMetastore.getPartitionsByNames(hiveTable, partitionNamesBatch));
+        }
+        return partitionNameToPartitionMap;
     }
 
     @Override
@@ -127,5 +152,15 @@ public class HudiReadOptimizedDirectoryLister
         if (fileSystemView != null && !fileSystemView.isClosed()) {
             fileSystemView.close();
         }
+    }
+
+    private int updateBatchSize()
+    {
+        if (currentBatchSize <= 0) {
+            currentBatchSize = minPartitionBatchSize;
+        } else {
+            currentBatchSize = Math.min(currentBatchSize * 2, maxPartitionBatchSize);
+        }
+        return currentBatchSize;
     }
 }
