@@ -16,16 +16,11 @@ package io.trino.plugin.hudi.query;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.metastore.Column;
 import io.trino.plugin.hive.metastore.HiveMetastore;
-import io.trino.plugin.hive.metastore.MetastoreUtil;
 import io.trino.plugin.hive.metastore.Partition;
 import io.trino.plugin.hive.metastore.Table;
 import io.trino.plugin.hudi.HudiTableHandle;
 import io.trino.plugin.hudi.partition.HiveHudiPartitionInfo;
 import io.trino.plugin.hudi.partition.HudiPartitionInfo;
-import io.trino.spi.connector.ConnectorSession;
-import io.trino.spi.connector.SchemaTableName;
-import io.trino.spi.connector.TableNotFoundException;
-import io.trino.spi.predicate.TupleDomain;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -34,12 +29,9 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
-import static io.trino.plugin.hudi.HudiSessionProperties.getMaxPartitionBatchSize;
-import static io.trino.plugin.hudi.HudiSessionProperties.getMinPartitionBatchSize;
 import static io.trino.plugin.hudi.HudiUtil.getFileStatus;
 
 public class HudiReadOptimizedDirectoryLister
@@ -48,16 +40,9 @@ public class HudiReadOptimizedDirectoryLister
     private final HudiTableHandle tableHandle;
     private final HiveMetastore hiveMetastore;
     private final Table hiveTable;
-    private final SchemaTableName tableName;
     private final List<HiveColumnHandle> partitionColumnHandles;
     private final HoodieTableFileSystemView fileSystemView;
-    private final TupleDomain<String> partitionKeysFilter;
     private final List<Column> partitionColumns;
-
-    private List<String> hivePartitionNames;
-    private final int minPartitionBatchSize;
-    private final int maxPartitionBatchSize;
-    private int currentBatchSize;
 
     public HudiReadOptimizedDirectoryLister(
             HoodieMetadataConfig metadataConfig,
@@ -67,32 +52,22 @@ public class HudiReadOptimizedDirectoryLister
             HiveMetastore hiveMetastore,
             Table hiveTable,
             List<HiveColumnHandle> partitionColumnHandles,
-            ConnectorSession session)
+            List<Column> partitionColumns)
     {
         this.tableHandle = tableHandle;
-        this.tableName = tableHandle.getSchemaTableName();
         this.hiveMetastore = hiveMetastore;
         this.hiveTable = hiveTable;
         this.partitionColumnHandles = partitionColumnHandles;
         this.fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(engineContext, metaClient, metadataConfig);
-        this.partitionKeysFilter = MetastoreUtil.computePartitionKeyFilter(partitionColumnHandles, tableHandle.getPartitionPredicates());
-        this.partitionColumns = hiveTable.getPartitionColumns();
-        this.minPartitionBatchSize = getMinPartitionBatchSize(session);
-        this.maxPartitionBatchSize = getMaxPartitionBatchSize(session);
-        this.currentBatchSize = -1;
+        this.partitionColumns = partitionColumns;
     }
 
     @Override
-    public List<HudiPartitionInfo> getPartitionsToScan()
+    public List<HudiPartitionInfo> getPartitionsToScan(List<String> partitionNames)
     {
-        if (hivePartitionNames == null) {
-            hivePartitionNames = partitionColumns.isEmpty()
-                    ? Collections.singletonList("")
-                    : getPartitionNamesFromHiveMetastore(partitionKeysFilter);
-        }
-        Map<String, Optional<Partition>> partitionNameToPartitionMap = buildPartitionMapBatch(hivePartitionNames);
+        Map<String, Optional<Partition>> partitionNameToPartitionMap = getPartitions(partitionNames);
 
-        List<HudiPartitionInfo> allPartitionInfoList = hivePartitionNames.stream()
+        List<HudiPartitionInfo> allPartitionInfoList = partitionNames.stream()
                 .map(hivePartitionName -> new HiveHudiPartitionInfo(
                         hivePartitionName,
                         partitionColumns,
@@ -120,30 +95,10 @@ public class HudiReadOptimizedDirectoryLister
                 .collect(toImmutableList());
     }
 
-    private List<String> getPartitionNamesFromHiveMetastore(TupleDomain<String> partitionKeysFilter)
-    {
-        return hiveMetastore.getPartitionNamesByFilter(
-                tableName.getSchemaName(),
-                tableName.getTableName(),
-                partitionColumns.stream().map(Column::getName).collect(Collectors.toList()),
-                partitionKeysFilter).orElseThrow(() -> new TableNotFoundException(tableHandle.getSchemaTableName()));
-    }
-
     @Override
-    public Map<String, Optional<Partition>> buildPartitionMapBatch(List<String> partitionNames)
+    public Map<String, Optional<Partition>> getPartitions(List<String> partitionNames)
     {
-        Map<String, Optional<Partition>> partitionNameToPartitionMap = new ConcurrentHashMap<>();
-        Iterator<String> iterator = partitionNames.iterator();
-        while (iterator.hasNext()) {
-            List<String> partitionNamesBatch = new ArrayList<>();
-            int batchSize = updateBatchSize();
-            while (iterator.hasNext() && batchSize > 0) {
-                partitionNamesBatch.add(iterator.next());
-                batchSize--;
-            }
-            partitionNameToPartitionMap.putAll(hiveMetastore.getPartitionsByNames(hiveTable, partitionNamesBatch));
-        }
-        return partitionNameToPartitionMap;
+        return hiveMetastore.getPartitionsByNames(hiveTable, partitionNames);
     }
 
     @Override
@@ -152,15 +107,5 @@ public class HudiReadOptimizedDirectoryLister
         if (fileSystemView != null && !fileSystemView.isClosed()) {
             fileSystemView.close();
         }
-    }
-
-    private int updateBatchSize()
-    {
-        if (currentBatchSize <= 0) {
-            currentBatchSize = minPartitionBatchSize;
-        } else {
-            currentBatchSize = Math.min(currentBatchSize * 2, maxPartitionBatchSize);
-        }
-        return currentBatchSize;
     }
 }

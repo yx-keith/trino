@@ -46,6 +46,9 @@ public class HudiConfig
     private double minimumAssignedSplitWeight = 0.05;
     private int maxSplitsPerSecond = Integer.MAX_VALUE;
     private int maxOutstandingSplits = 1000;
+    private int partitionLoaderParallelism = 5;
+    private int splitLoaderParallelism = 10;
+
 
     public List<String> getColumnsToHide()
     {
@@ -189,6 +192,34 @@ public class HudiConfig
     public HudiConfig setMaxOutstandingSplits(int maxOutstandingSplits)
     {
         this.maxOutstandingSplits = maxOutstandingSplits;
+        return this;
+    }
+
+    @Min(1)
+    public int getPartitionLoaderParallelism()
+    {
+        return partitionLoaderParallelism;
+    }
+
+    @Config("hudi.partition-loader-parallelism")
+    @ConfigDescription("hudi partition loader parallelism.")
+    public HudiConfig setPartitionLoaderParallelism(int partitionLoaderParallism)
+    {
+        this.partitionLoaderParallelism = partitionLoaderParallism;
+        return this;
+    }
+
+    @Min(1)
+    public int getSplitLoaderParallelism()
+    {
+        return splitLoaderParallelism;
+    }
+
+    @Config("hudi.split-loader-parallelism")
+    @ConfigDescription("hudi split loader parallelism.")
+    public HudiConfig setSplitLoaderParallelism(int splitLoaderParallelism)
+    {
+        this.splitLoaderParallelism = splitLoaderParallelism;
         return this;
     }
 }

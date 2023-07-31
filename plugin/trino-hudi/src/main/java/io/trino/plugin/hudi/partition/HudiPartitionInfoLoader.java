@@ -13,61 +13,54 @@
  */
 package io.trino.plugin.hudi.partition;
 
-import io.trino.plugin.hive.metastore.Partition;
 import io.trino.plugin.hudi.query.HudiDirectoryLister;
-import io.trino.spi.connector.ConnectorSession;
-import org.apache.hudi.exception.HoodieIOException;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.stream.Collectors;
-
-import static io.trino.plugin.hudi.HudiSessionProperties.getMaxPartitionBatchSize;
-import static io.trino.plugin.hudi.HudiSessionProperties.getMinPartitionBatchSize;
 
 public class HudiPartitionInfoLoader
         implements Runnable
 {
     private final HudiDirectoryLister hudiDirectoryLister;
-    private final Deque<HudiPartitionInfo> partitionQueue;
+    private final Deque<HudiPartitionInfo> partitionInfoQueue;
+    private final Deque<List<String>> partitionNamesQueue;
+    private final Deque<Boolean> partitionLoadStatusQueue;
 
     public HudiPartitionInfoLoader(
-            ConnectorSession session,
-            HudiDirectoryLister hudiDirectoryLister)
+            Deque<List<String>> partitionNamesQueues,
+            HudiDirectoryLister hudiDirectoryLister,
+            Deque<HudiPartitionInfo> partitionInfoQueue,
+            Deque<Boolean> partitionLoadStatusQueue)
     {
+        this.partitionNamesQueue = partitionNamesQueues;
         this.hudiDirectoryLister = hudiDirectoryLister;
-        this.partitionQueue = new ConcurrentLinkedDeque<>();
+        this.partitionInfoQueue = partitionInfoQueue;
+        this.partitionLoadStatusQueue = partitionLoadStatusQueue;
     }
 
     @Override
     public void run()
     {
-        List<HudiPartitionInfo> hudiPartitionInfoList = hudiDirectoryLister.getPartitionsToScan().stream()
-                .sorted(Comparator.comparing(HudiPartitionInfo::getComparingKey))
-                .collect(Collectors.toList());
+        while (!partitionNamesQueue.isEmpty()) {
+            List<String> partitionNames = partitionNamesQueue.poll();
+            List<HudiPartitionInfo> hudiPartitionInfoList = hudiDirectoryLister.getPartitionsToScan(partitionNames).stream()
+                    .sorted(Comparator.comparing(HudiPartitionInfo::getComparingKey))
+                    .collect(Collectors.toList());
 
-        // empty partitioned table
-        if (hudiPartitionInfoList.isEmpty()) {
-            return;
+            // empty partitioned table
+            if (hudiPartitionInfoList.isEmpty()) {
+                return;
+            }
+
+            // non-partitioned table
+            if (hudiPartitionInfoList.size() == 1 && hudiPartitionInfoList.get(0).getHivePartitionName().isEmpty()) {
+                partitionInfoQueue.addAll(hudiPartitionInfoList);
+                return;
+            }
+            partitionInfoQueue.addAll(hudiPartitionInfoList);
         }
-
-        // non-partitioned table
-        if (hudiPartitionInfoList.size() == 1 && hudiPartitionInfoList.get(0).getHivePartitionName().isEmpty()) {
-            partitionQueue.addAll(hudiPartitionInfoList);
-            return;
-        }
-
-        partitionQueue.addAll(hudiPartitionInfoList);
-    }
-
-    public Deque<HudiPartitionInfo> getPartitionQueue()
-    {
-        return partitionQueue;
+        partitionLoadStatusQueue.poll();
     }
 }

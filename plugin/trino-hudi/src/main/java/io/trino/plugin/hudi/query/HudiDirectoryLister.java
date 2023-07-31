@@ -25,9 +25,9 @@ import java.util.Optional;
 public interface HudiDirectoryLister
         extends Closeable
 {
-    List<HudiPartitionInfo> getPartitionsToScan();
+    List<HudiPartitionInfo> getPartitionsToScan(List<String> partitionNames);
 
     List<FileStatus> listStatus(HudiPartitionInfo partitionInfo);
 
-    Map<String, Optional<Partition>> buildPartitionMapBatch(List<String> partitionNames);
+    Map<String, Optional<Partition>> getPartitions(List<String> partitionNames);
 }

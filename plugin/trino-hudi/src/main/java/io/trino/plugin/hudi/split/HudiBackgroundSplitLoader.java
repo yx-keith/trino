@@ -27,23 +27,29 @@ import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorSplit;
 import org.apache.hadoop.fs.FileStatus;
 
-import java.util.Collection;
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+import static io.trino.plugin.hudi.HudiSessionProperties.getPartitionLoaderParallelism;
 import static java.util.Objects.requireNonNull;
 
 public class HudiBackgroundSplitLoader
 {
-    private final ConnectorSession session;
     private final HudiDirectoryLister hudiDirectoryLister;
     private final AsyncQueue<ConnectorSplit> asyncQueue;
     private final ExecutorService executor;
     private final Consumer<Throwable> errorListener;
     private final HudiSplitFactory hudiSplitFactory;
+    private final Deque<List<String>> partitionNamesQueue;
+    private final Deque<HudiPartitionInfo> partitionInfoQueue;
+    private final ScheduledExecutorService partitionLoaderExecutor;
+    private final Deque<Boolean> partitionLoadStatusQueue;
+    private final int partitionLoaderNumThreads;
+
 
     public HudiBackgroundSplitLoader(
             ConnectorSession session,
@@ -52,41 +58,45 @@ public class HudiBackgroundSplitLoader
             AsyncQueue<ConnectorSplit> asyncQueue,
             ExecutorService executor,
             HudiSplitWeightProvider hudiSplitWeightProvider,
+            Deque<List<String>> partitionNamesQueue,
+            Deque<HudiPartitionInfo> partitionInfoQueue,
+            ScheduledExecutorService partitionLoaderExecutor,
             Consumer<Throwable> errorListener)
     {
-        this.session = requireNonNull(session, "session is null");
         this.hudiDirectoryLister = requireNonNull(hudiDirectoryLister, "hudiDirectoryLister is null");
         this.asyncQueue = requireNonNull(asyncQueue, "asyncQueue is null");
         this.executor = requireNonNull(executor, "executor is null");
         this.errorListener = requireNonNull(errorListener, "errorListener is null");
         this.hudiSplitFactory = new HudiSplitFactory(tableHandle, hudiSplitWeightProvider);
+        this.partitionNamesQueue = requireNonNull(partitionNamesQueue, "partitionNamesQueue is null");
+        this.partitionInfoQueue = requireNonNull(partitionInfoQueue, "partitionInfoDeque is null");
+        this.partitionLoaderExecutor = requireNonNull(partitionLoaderExecutor, "partitionLoaderExecutor is null");
+        this.partitionLoadStatusQueue = new ConcurrentLinkedDeque<>();
+        this.partitionLoaderNumThreads = getPartitionLoaderParallelism(session);
     }
+
 
     public void start()
     {
-        ListenableFuture<Collection<HudiPartitionInfo>> partitionsFuture = Futures.submit(this::loadPartitions, executor);
-        hookErrorListener(partitionsFuture);
+        List<ListenableFuture<Void>> splitFutures = new ArrayList<>();
+        for (int i = 0; i < partitionLoaderNumThreads; i++) {
+            partitionLoadStatusQueue.offer(true);
+            HudiPartitionInfoLoader partitionInfoLoader = new HudiPartitionInfoLoader(partitionNamesQueue, hudiDirectoryLister, partitionInfoQueue, partitionLoadStatusQueue);
+            Futures.submit(partitionInfoLoader, partitionLoaderExecutor);
+        }
 
-        ListenableFuture<Void> splitFutures = Futures.transform(
-                partitionsFuture,
-                partitions -> {
-                    List<ListenableFuture<Void>> futures = partitions.stream()
-                            .map(partition -> Futures.submit(() -> loadSplits(partition), executor))
-                            .peek(this::hookErrorListener)
-                            .collect(Collectors.toList());
-                    Futures.whenAllComplete(futures).run(asyncQueue::finish, directExecutor());
-                    return null;
-                },
-                directExecutor());
-        hookErrorListener(splitFutures);
+        while (!partitionLoadStatusQueue.isEmpty() || !partitionInfoQueue.isEmpty()) {
+            if (partitionInfoQueue.isEmpty()) {
+                continue;
+            }
+            HudiPartitionInfo partition = partitionInfoQueue.poll();
+            ListenableFuture<Void> splitsFuture = Futures.submit(() -> loadSplits(partition), executor);
+            splitFutures.add(splitsFuture);
+        }
+
+        Futures.whenAllComplete(splitFutures).run(asyncQueue::finish, directExecutor());
     }
 
-    private Collection<HudiPartitionInfo> loadPartitions()
-    {
-        HudiPartitionInfoLoader partitionInfoLoader = new HudiPartitionInfoLoader(session, hudiDirectoryLister);
-        partitionInfoLoader.run();
-        return partitionInfoLoader.getPartitionQueue();
-    }
 
     private void loadSplits(HudiPartitionInfo partition)
     {

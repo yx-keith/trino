@@ -49,6 +49,7 @@ public class HudiSessionProperties
     private static final String SIZE_BASED_SPLIT_WEIGHTS_ENABLED = "size_based_split_weights_enabled";
     private static final String STANDARD_SPLIT_WEIGHT_SIZE = "standard_split_weight_size";
     private static final String MINIMUM_ASSIGNED_SPLIT_WEIGHT = "minimum_assigned_split_weight";
+    private static final String PARTITION_LOADER_PARALLELISM = "partition_loader_parallelism";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -111,6 +112,11 @@ public class HudiSessionProperties
                                 throw new TrinoException(INVALID_SESSION_PROPERTY, format("%s must be > 0 and <= 1.0: %s", MINIMUM_ASSIGNED_SPLIT_WEIGHT, value));
                             }
                         },
+                        false),
+                integerProperty(
+                        PARTITION_LOADER_PARALLELISM,
+                        "hudi partition loader parallelism.",
+                        hudiConfig.getPartitionLoaderParallelism(),
                         false));
     }
 
@@ -164,5 +170,10 @@ public class HudiSessionProperties
     public static double getMinimumAssignedSplitWeight(ConnectorSession session)
     {
         return session.getProperty(MINIMUM_ASSIGNED_SPLIT_WEIGHT, Double.class);
+    }
+
+    public static int getPartitionLoaderParallelism(ConnectorSession session)
+    {
+        return session.getProperty(PARTITION_LOADER_PARALLELISM, Integer.class);
     }
 }
