@@ -111,6 +111,11 @@ public class HudiSplitSource
                 partitionLoaderExecutor,
                 throwable -> {
                     trinoException.compareAndSet(null, new TrinoException(GENERIC_INTERNAL_ERROR,
+                            "Failed to generator partitions info for " + table.getTableName(), throwable));
+                    queue.finish();
+                },
+                throwable -> {
+                    trinoException.compareAndSet(null, new TrinoException(GENERIC_INTERNAL_ERROR,
                             "Failed to generate splits for " + table.getTableName(), throwable));
                     queue.finish();
                 });
