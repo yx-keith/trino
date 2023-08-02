@@ -41,7 +41,9 @@ import java.util.function.BiFunction;
 import static com.google.inject.multibindings.Multibinder.newSetBinder;
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
 import static io.airlift.configuration.ConfigBinder.configBinder;
-import static java.util.concurrent.Executors.*;
+import static java.util.concurrent.Executors.newCachedThreadPool;
+import static java.util.concurrent.Executors.newScheduledThreadPool;
+import static java.util.concurrent.Executors.newFixedThreadPool;
 import static org.weakref.jmx.guice.ExportBinder.newExporter;
 
 public class HudiModule
@@ -80,7 +82,7 @@ public class HudiModule
         return newCachedThreadPool(daemonThreadsNamed("hudi-split-manager-%d"));
     }
 
-    @ForHudiSplitSource
+    @ForHudiPartitionLoader
     @Singleton
     @Provides
     public ScheduledExecutorService createPartitionLoaderExecutorService(HudiConfig hudiConfig)

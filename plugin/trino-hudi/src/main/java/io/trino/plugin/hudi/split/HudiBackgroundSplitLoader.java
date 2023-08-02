@@ -30,7 +30,9 @@ import org.apache.hadoop.fs.FileStatus;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.Consumer;
 
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
@@ -104,16 +106,15 @@ public class HudiBackgroundSplitLoader
     private void loadSplits()
     {
         while (!partitionInfoLoaderStatusQueue.isEmpty() || !partitionInfoQueue.isEmpty()) {
-            if (partitionInfoQueue.isEmpty()) {
-                continue;
-            }
             HudiPartitionInfo partition = partitionInfoQueue.poll();
-            List<HivePartitionKey> partitionKeys = partition.getHivePartitionKeys();
-            List<FileStatus> partitionFiles = hudiDirectoryLister.listStatus(partition);
-            partitionFiles.stream()
-                    .flatMap(fileStatus -> hudiSplitFactory.createSplits(partitionKeys, fileStatus))
-                    .map(asyncQueue::offer)
-                    .forEachOrdered(MoreFutures::getFutureValue);
+            if (partition != null) {
+                List<HivePartitionKey> partitionKeys = partition.getHivePartitionKeys();
+                List<FileStatus> partitionFiles = hudiDirectoryLister.listStatus(partition);
+                partitionFiles.stream()
+                        .flatMap(fileStatus -> hudiSplitFactory.createSplits(partitionKeys, fileStatus))
+                        .map(asyncQueue::offer)
+                        .forEachOrdered(MoreFutures::getFutureValue);
+            }
         }
     }
 

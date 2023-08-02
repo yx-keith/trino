@@ -62,7 +62,7 @@ public class HudiSplitManager
             BiFunction<ConnectorIdentity, HiveTransactionHandle, HiveMetastore> metastoreProvider,
             HdfsEnvironment hdfsEnvironment,
             @ForHudiSplitManager ExecutorService executor,
-            @ForHudiSplitSource ScheduledExecutorService partitionLoaderExecutor,
+            @ForHudiPartitionLoader ScheduledExecutorService partitionLoaderExecutor,
             @ForHudiSplitLoader ExecutorService splitLoaderExecutor,
             HudiConfig hudiConfig)
     {

@@ -45,21 +45,23 @@ public class HudiPartitionInfoLoader
     {
         while (!partitionNamesQueue.isEmpty()) {
             List<String> partitionNames = partitionNamesQueue.poll();
-            List<HudiPartitionInfo> hudiPartitionInfoList = hudiDirectoryLister.getPartitionsToScan(partitionNames).stream()
-                    .sorted(Comparator.comparing(HudiPartitionInfo::getComparingKey))
-                    .collect(Collectors.toList());
+            if (partitionNames != null) {
+                List<HudiPartitionInfo> hudiPartitionInfoList = hudiDirectoryLister.getPartitionsToScan(partitionNames).stream()
+                        .sorted(Comparator.comparing(HudiPartitionInfo::getComparingKey))
+                        .collect(Collectors.toList());
 
-            // empty partitioned table
-            if (hudiPartitionInfoList.isEmpty()) {
-                return;
-            }
+                // empty partitioned table
+                if (hudiPartitionInfoList.isEmpty()) {
+                    return;
+                }
 
-            // non-partitioned table
-            if (hudiPartitionInfoList.size() == 1 && hudiPartitionInfoList.get(0).getHivePartitionName().isEmpty()) {
+                // non-partitioned table
+                if (hudiPartitionInfoList.size() == 1 && hudiPartitionInfoList.get(0).getHivePartitionName().isEmpty()) {
+                    partitionInfoQueue.addAll(hudiPartitionInfoList);
+                    return;
+                }
                 partitionInfoQueue.addAll(hudiPartitionInfoList);
-                return;
             }
-            partitionInfoQueue.addAll(hudiPartitionInfoList);
         }
         partitionLoadStatusQueue.poll();
     }
