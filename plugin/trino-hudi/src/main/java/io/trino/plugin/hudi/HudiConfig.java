@@ -48,6 +48,7 @@ public class HudiConfig
     private int maxOutstandingSplits = 1000;
     private int partitionLoaderParallelism = 5;
     private int splitLoaderParallelism = 5;
+    private boolean hudiMorSnapshotQueryEnabled;
 
 
     public List<String> getColumnsToHide()
@@ -220,6 +221,19 @@ public class HudiConfig
     public HudiConfig setSplitLoaderParallelism(int splitLoaderParallelism)
     {
         this.splitLoaderParallelism = splitLoaderParallelism;
+        return this;
+    }
+
+    public boolean isHudiMorSnapshotQueryEnabled()
+    {
+        return hudiMorSnapshotQueryEnabled;
+    }
+
+    @Config("hudi.mor-snapshot-query-enabled")
+    @ConfigDescription("can hudi mor table enable snapshot query.")
+    public HudiConfig setHudiMorSnapshotQueryEnabled(boolean hudiMorSnapshotQueryEnabled)
+    {
+        this.hudiMorSnapshotQueryEnabled = hudiMorSnapshotQueryEnabled;
         return this;
     }
 }

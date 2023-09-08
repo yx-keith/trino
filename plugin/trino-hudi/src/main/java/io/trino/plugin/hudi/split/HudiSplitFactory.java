@@ -15,20 +15,29 @@ package io.trino.plugin.hudi.split;
 
 import com.google.common.collect.ImmutableList;
 import io.trino.plugin.hive.HivePartitionKey;
+import io.trino.plugin.hudi.HudiFile;
 import io.trino.plugin.hudi.HudiSplit;
 import io.trino.plugin.hudi.HudiTableHandle;
 import io.trino.spi.TrinoException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.PathWithBootstrapFileStatus;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CANNOT_OPEN_SPLIT;
+import static io.trino.plugin.hudi.HudiUtil.getFileStatus;
 import static java.util.Objects.requireNonNull;
+import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
+import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 
 public class HudiSplitFactory
 {
@@ -36,20 +45,74 @@ public class HudiSplitFactory
 
     private final HudiTableHandle hudiTableHandle;
     private final HudiSplitWeightProvider hudiSplitWeightProvider;
+    private final boolean hudiMorSnapshotQueryEnabled;
 
     public HudiSplitFactory(
             HudiTableHandle hudiTableHandle,
-            HudiSplitWeightProvider hudiSplitWeightProvider)
+            HudiSplitWeightProvider hudiSplitWeightProvider,
+            Boolean hudiMorSnapshotQueryEnabled)
     {
         this.hudiTableHandle = requireNonNull(hudiTableHandle, "hudiTableHandle is null");
         this.hudiSplitWeightProvider = requireNonNull(hudiSplitWeightProvider, "hudiSplitWeightProvider is null");
+        this.hudiMorSnapshotQueryEnabled = requireNonNull(hudiMorSnapshotQueryEnabled, "hudiMorSnapshotQueryEnabled is null");
     }
 
-    public Stream<HudiSplit> createSplits(List<HivePartitionKey> partitionKeys, FileStatus fileStatus)
+    public Stream<HudiSplit> createSplits(List<HivePartitionKey> partitionKeys, FileSlice fileSlice, String commitTime)
+    {
+        Option<HoodieBaseFile> baseFile = fileSlice.getBaseFile();
+        if (COPY_ON_WRITE.equals(hudiTableHandle.getTableType()) && baseFile.isPresent()) {
+            FileStatus fileStatus = getFileStatus(baseFile.get());
+            return createBaseSplitsFromFileStatus(partitionKeys, fileStatus, commitTime);
+        }
+        else if (MERGE_ON_READ.equals(hudiTableHandle.getTableType()) && baseFile.isPresent() && !hudiMorSnapshotQueryEnabled) {
+            FileStatus fileStatus = getFileStatus(baseFile.get());
+            return createBaseSplitsFromFileStatus(partitionKeys, fileStatus, commitTime);
+        }
+        else if (MERGE_ON_READ.equals(hudiTableHandle.getTableType()) && hudiMorSnapshotQueryEnabled) {
+            long logFileCount = fileSlice.getLogFiles().count();
+            if(baseFile.isPresent() && logFileCount <= 0) {
+                FileStatus fileStatus = getFileStatus(baseFile.get());
+                return createBaseSplitsFromFileStatus(partitionKeys, fileStatus, commitTime);
+            }
+            else if (baseFile.isPresent()) {
+                FileStatus baseFileStatus = getFileStatus(baseFile.get());
+                Stream<HudiSplit> baseFileSplits = createBaseSplitsFromFileStatus(partitionKeys, baseFileStatus, commitTime);
+                List<HudiFile> logFiles = fileSlice.getLogFiles()
+                        .map(logFile -> new HudiFile(logFile.getPath().toString(), 0, logFile.getFileSize(), logFile.getFileSize(), logFile.getFileStatus().getModificationTime()))
+                        .collect(Collectors.toList());
+                long splitSizeInBytes = logFiles.size() > 0 ? logFiles.stream().map(HudiFile::getLength).reduce(0L, Long::sum) : 0L;
+                Stream<HudiSplit> logFileSplits = createLogSplitsFromFileStatus(partitionKeys, logFiles, splitSizeInBytes, commitTime);
+                return Stream.concat(baseFileSplits, logFileSplits);
+            }
+            else if (logFileCount > 0) {
+                List<HudiFile> logFiles = fileSlice.getLogFiles()
+                        .map(logFile -> new HudiFile(logFile.getPath().toString(), 0, logFile.getFileSize(), logFile.getFileSize(), logFile.getFileStatus().getModificationTime()))
+                        .collect(Collectors.toList());
+                long splitSizeInBytes = logFiles.size() > 0 ? logFiles.stream().map(HudiFile::getLength).reduce(0L, Long::sum) : 0L;
+                return createLogSplitsFromFileStatus(partitionKeys, logFiles, splitSizeInBytes, commitTime);
+            }
+        }
+        return Stream.empty();
+    }
+
+    private Stream<HudiSplit> createLogSplitsFromFileStatus(List<HivePartitionKey> partitionKeys, List<HudiFile> logFiles, long splitSizeInBytes, String commitTime)
+    {
+        return Stream.of(
+                new HudiSplit(
+                        Optional.empty(),
+                        logFiles,
+                        ImmutableList.of(),
+                        hudiTableHandle.getRegularPredicates(),
+                        partitionKeys,
+                        hudiSplitWeightProvider.calculateSplitWeight(splitSizeInBytes),
+                        commitTime));
+    }
+
+    public Stream<HudiSplit> createBaseSplitsFromFileStatus(List<HivePartitionKey> partitionKeys, FileStatus fileStatus, String commitTime)
     {
         List<FileSplit> splits;
         try {
-            splits = createSplits(fileStatus);
+            splits = createBaseSplitsFromFileStatus(fileStatus);
         }
         catch (IOException e) {
             throw new TrinoException(HUDI_CANNOT_OPEN_SPLIT, e);
@@ -57,18 +120,16 @@ public class HudiSplitFactory
 
         return splits.stream()
                 .map(fileSplit -> new HudiSplit(
-                        fileSplit.getPath().toString(),
-                        fileSplit.getStart(),
-                        fileSplit.getLength(),
-                        fileStatus.getLen(),
-                        fileStatus.getModificationTime(),
+                        Optional.of(new HudiFile(fileSplit.getPath().toString(), fileSplit.getStart(), fileSplit.getLength(), fileStatus.getLen(), fileStatus.getModificationTime())),
+                        ImmutableList.of(),
                         ImmutableList.of(),
                         hudiTableHandle.getRegularPredicates(),
                         partitionKeys,
-                        hudiSplitWeightProvider.calculateSplitWeight(fileSplit.getLength())));
+                        hudiSplitWeightProvider.calculateSplitWeight(fileSplit.getLength()),
+                        commitTime));
     }
 
-    private List<FileSplit> createSplits(FileStatus fileStatus)
+    private List<FileSplit> createBaseSplitsFromFileStatus(FileStatus fileStatus)
             throws IOException
     {
         if (fileStatus.isDirectory()) {

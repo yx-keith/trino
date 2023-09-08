@@ -21,9 +21,9 @@ import io.trino.plugin.hive.metastore.Table;
 import io.trino.plugin.hudi.HudiTableHandle;
 import io.trino.plugin.hudi.partition.HiveHudiPartitionInfo;
 import io.trino.plugin.hudi.partition.HudiPartitionInfo;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -34,7 +34,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
-import static io.trino.plugin.hudi.HudiUtil.getFileStatus;
 
 public class HudiReadOptimizedDirectoryLister
         implements HudiDirectoryLister
@@ -90,10 +89,9 @@ public class HudiReadOptimizedDirectoryLister
     }
 
     @Override
-    public List<FileStatus> listStatus(HudiPartitionInfo partitionInfo)
+    public List<FileSlice> listFileSlices(HudiPartitionInfo partitionInfo, String commitTime)
     {
-        return fileSystemView.getLatestBaseFiles(partitionInfo.getRelativePartitionPath())
-                .map(baseFile -> getFileStatus(baseFile))
+        return fileSystemView.getLatestFileSlicesBeforeOrOn(partitionInfo.getRelativePartitionPath(), commitTime, false)
                 .collect(toImmutableList());
     }
 

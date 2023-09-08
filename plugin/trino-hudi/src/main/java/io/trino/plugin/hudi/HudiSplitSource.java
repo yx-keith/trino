@@ -42,6 +42,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 
 import java.util.List;
 import java.util.Map;
@@ -95,6 +96,8 @@ public class HudiSplitSource
                 .map(column -> partitionColumnHandleMap.get(column.getName())).collect(toList());
         this.minPartitionBatchSize = getMinPartitionBatchSize(session);
         this.maxPartitionBatchSize = getMaxPartitionBatchSize(session);
+        String latestCommitTime = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp)
+                .orElseThrow(() -> new TrinoException(HudiErrorCode.HUDI_NO_VALID_COMMIT_EXISTS_ERROR, "hudi has no valid commit exists."));
         HudiDirectoryLister hudiDirectoryLister = new HudiReadOptimizedDirectoryLister(
                 metadataConfig,
                 engineContext,
@@ -118,6 +121,7 @@ public class HudiSplitSource
                 partitionNamesQueue,
                 partitionInfoQueue,
                 new BoundedExecutor(executor, getPartitionInfoLoaderParallelism(session)),
+                latestCommitTime,
                 throwable -> {
                     trinoException.compareAndSet(null, new TrinoException(GENERIC_INTERNAL_ERROR,
                             "Failed to generator partitions info for " + table.getTableName(), throwable));

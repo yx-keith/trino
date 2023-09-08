@@ -54,6 +54,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.trino.plugin.hive.HiveMetadata.TABLE_COMMENT;
 import static io.trino.plugin.hive.HiveTimestampPrecision.NANOSECONDS;
+import static io.trino.plugin.hive.metastore.MetastoreUtil.getHiveSchema;
 import static io.trino.plugin.hive.util.HiveUtil.columnMetadataGetter;
 import static io.trino.plugin.hive.util.HiveUtil.hiveColumnHandles;
 import static io.trino.plugin.hive.util.HiveUtil.isHiveSystemSchema;
@@ -114,7 +115,8 @@ public class HudiMetadata
                 table.get().getStorage().getLocation(),
                 HoodieTableType.COPY_ON_WRITE,
                 TupleDomain.all(),
-                TupleDomain.all());
+                TupleDomain.all(),
+                getHiveSchema(table.get()));
     }
 
     @Override

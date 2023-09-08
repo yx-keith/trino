@@ -25,49 +25,39 @@ import io.trino.spi.connector.ConnectorSplit;
 import io.trino.spi.predicate.TupleDomain;
 
 import java.util.List;
+import java.util.Optional;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
-import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 public class HudiSplit
         implements ConnectorSplit
 {
-    private final String path;
-    private final long start;
-    private final long length;
-    private final long fileSize;
-    private final long fileModifiedTime;
+    private final Optional<HudiFile> baseFile;
+    private final List<HudiFile>  logFiles;
     private final List<HostAddress> addresses;
     private final TupleDomain<HiveColumnHandle> predicate;
     private final List<HivePartitionKey> partitionKeys;
     private final SplitWeight splitWeight;
+    private final String commitTime;
 
     @JsonCreator
     public HudiSplit(
-            @JsonProperty("path") String path,
-            @JsonProperty("start") long start,
-            @JsonProperty("length") long length,
-            @JsonProperty("fileSize") long fileSize,
-            @JsonProperty("fileModifiedTime") long fileModifiedTime,
+            @JsonProperty("baseFile") Optional<HudiFile> baseFile,
+            @JsonProperty("logFiles") List<HudiFile> logFiles,
             @JsonProperty("addresses") List<HostAddress> addresses,
             @JsonProperty("predicate") TupleDomain<HiveColumnHandle> predicate,
             @JsonProperty("partitionKeys") List<HivePartitionKey> partitionKeys,
-            @JsonProperty("splitWeight") SplitWeight splitWeight)
+            @JsonProperty("splitWeight") SplitWeight splitWeight,
+            @JsonProperty("commitTime") String commitTime)
     {
-        checkArgument(start >= 0, "start must be positive");
-        checkArgument(length >= 0, "length must be positive");
-        checkArgument(start + length <= fileSize, "fileSize must be at least start + length");
-
-        this.path = requireNonNull(path, "path is null");
-        this.start = start;
-        this.length = length;
-        this.fileSize = fileSize;
-        this.fileModifiedTime = fileModifiedTime;
+        this.baseFile = baseFile;
+        this.logFiles = logFiles;
         this.addresses = ImmutableList.copyOf(requireNonNull(addresses, "addresses is null"));
         this.predicate = requireNonNull(predicate, "predicate is null");
         this.partitionKeys = ImmutableList.copyOf(requireNonNull(partitionKeys, "partitionKeys is null"));
         this.splitWeight = requireNonNull(splitWeight, "splitWeight is null");
+        this.commitTime = requireNonNull(commitTime, "commitTime is null");
     }
 
     @Override
@@ -87,11 +77,6 @@ public class HudiSplit
     public Object getInfo()
     {
         return ImmutableMap.builder()
-                .put("path", path)
-                .put("start", start)
-                .put("length", length)
-                .put("fileSize", fileSize)
-                .put("fileModifiedTime", fileModifiedTime)
                 .buildOrThrow();
     }
 
@@ -103,33 +88,21 @@ public class HudiSplit
     }
 
     @JsonProperty
-    public String getPath()
+    public Optional<HudiFile> getBaseFile()
     {
-        return path;
+        return baseFile;
     }
 
     @JsonProperty
-    public long getStart()
+    public List<HudiFile> getLogFiles()
     {
-        return start;
+        return logFiles;
     }
 
     @JsonProperty
-    public long getLength()
+    public String getCommitTime()
     {
-        return length;
-    }
-
-    @JsonProperty
-    public long getFileSize()
-    {
-        return fileSize;
-    }
-
-    @JsonProperty
-    public long getFileModifiedTime()
-    {
-        return fileModifiedTime;
+        return commitTime;
     }
 
     @JsonProperty
@@ -148,11 +121,6 @@ public class HudiSplit
     public String toString()
     {
         return toStringHelper(this)
-                .addValue(path)
-                .addValue(start)
-                .addValue(length)
-                .addValue(fileSize)
-                .addValue(fileModifiedTime)
                 .toString();
     }
 }
