@@ -164,4 +164,9 @@ public final class HudiUtil
             throw new TrinoException(HUDI_CANNOT_OPEN_SPLIT, "Error getting file status of " + baseFile.getPath(), e);
         }
     }
+
+    public static HudiFile getLogFile(HudiSplit split)
+    {
+        return split.getLogFiles().get(0);
+    }
 }

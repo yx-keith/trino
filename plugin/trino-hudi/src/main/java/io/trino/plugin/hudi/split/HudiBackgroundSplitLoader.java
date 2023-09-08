@@ -25,7 +25,7 @@ import io.trino.plugin.hudi.partition.HudiPartitionInfoLoader;
 import io.trino.plugin.hudi.query.HudiDirectoryLister;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorSplit;
-import org.apache.hadoop.fs.FileStatus;
+import org.apache.hudi.common.model.FileSlice;
 
 import java.util.ArrayList;
 import java.util.Deque;
@@ -35,8 +35,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.Consumer;
 
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
-import static io.trino.plugin.hudi.HudiSessionProperties.getPartitionInfoLoaderParallelism;
-import static io.trino.plugin.hudi.HudiSessionProperties.getSplitLoaderParallelism;
+import static io.trino.plugin.hudi.HudiSessionProperties.*;
 import static java.util.Objects.requireNonNull;
 
 public class HudiBackgroundSplitLoader
@@ -53,6 +52,7 @@ public class HudiBackgroundSplitLoader
     private final Deque<Boolean> partitionInfoLoaderStatusQueue;
     private final int partitionInfoLoaderNumThreads;
     private final int splitLoaderNumThreads;
+    private final String commitTime;
 
     public HudiBackgroundSplitLoader(
             ConnectorSession session,
@@ -64,6 +64,7 @@ public class HudiBackgroundSplitLoader
             Deque<List<String>> partitionNamesQueue,
             Deque<HudiPartitionInfo> partitionInfoQueue,
             Executor partitionInfoLoaderExecutor,
+            String commitTime,
             Consumer<Throwable> partitionErrorListener,
             Consumer<Throwable> splitErrorListener)
     {
@@ -73,10 +74,11 @@ public class HudiBackgroundSplitLoader
         this.partitionInfoLoaderExecutor = requireNonNull(partitionInfoLoaderExecutor, "partitionInfoLoaderExecutor is null");
         this.splitErrorListener = requireNonNull(splitErrorListener, "splitErrorListener is null");
         this.partitionErrorListener = requireNonNull(partitionErrorListener, "partitionErrorListener is null");
-        this.hudiSplitFactory = new HudiSplitFactory(tableHandle, hudiSplitWeightProvider);
+        this.hudiSplitFactory = new HudiSplitFactory(tableHandle, hudiSplitWeightProvider, isHudiMorSnapshotQueryEnabled(session));
         this.partitionNamesQueue = requireNonNull(partitionNamesQueue, "partitionNamesQueue is null");
         this.partitionInfoQueue = requireNonNull(partitionInfoQueue, "partitionInfoDeque is null");
         this.partitionInfoLoaderStatusQueue = new ConcurrentLinkedDeque<>();
+        this.commitTime = commitTime;
         this.partitionInfoLoaderNumThreads = getPartitionInfoLoaderParallelism(session);
         this.splitLoaderNumThreads = getSplitLoaderParallelism(session);
     }
@@ -106,11 +108,11 @@ public class HudiBackgroundSplitLoader
             HudiPartitionInfo partition = partitionInfoQueue.poll();
             if (partition != null) {
                 List<HivePartitionKey> partitionKeys = partition.getHivePartitionKeys();
-                List<FileStatus> partitionFiles = hudiDirectoryLister.listStatus(partition);
-                partitionFiles.stream()
-                        .flatMap(fileStatus -> hudiSplitFactory.createSplits(partitionKeys, fileStatus))
-                        .map(asyncQueue::offer)
-                        .forEachOrdered(MoreFutures::getFutureValue);
+                List<FileSlice> partitionFileSlices = hudiDirectoryLister.listFileSlices(partition, commitTime);
+                partitionFileSlices.stream()
+                                .flatMap(fileSlice -> hudiSplitFactory.createSplits(partitionKeys, fileSlice, commitTime))
+                                .map(asyncQueue::offer)
+                                .forEachOrdered(MoreFutures::getFutureValue);
             }
         }
     }

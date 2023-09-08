@@ -51,6 +51,7 @@ public class HudiSessionProperties
     private static final String MINIMUM_ASSIGNED_SPLIT_WEIGHT = "minimum_assigned_split_weight";
     private static final String PARTITION_INFO_LOADER_PARALLELISM = "partition_info_loader_parallelism";
     private static final String SPLIT_LOADER_PARALLELISM = "split_loader_parallelism";
+    private static final String HUDI_MOR_SNAPSHOT_QUERY_ENABLED = "hudi_mor_snapshot_query_enabled";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -123,6 +124,11 @@ public class HudiSessionProperties
                         SPLIT_LOADER_PARALLELISM,
                         "hudi split generator parallelism.",
                         hudiConfig.getSplitLoaderParallelism(),
+                        false),
+                booleanProperty(
+                        HUDI_MOR_SNAPSHOT_QUERY_ENABLED,
+                        "can hudi mor table enable snapshot query",
+                        hudiConfig.isHudiMorSnapshotQueryEnabled(),
                         false));
     }
 
@@ -187,4 +193,9 @@ public class HudiSessionProperties
     {
         return session.getProperty(SPLIT_LOADER_PARALLELISM, Integer.class);
     }
+    public static boolean isHudiMorSnapshotQueryEnabled(ConnectorSession session)
+    {
+        return session.getProperty(HUDI_MOR_SNAPSHOT_QUERY_ENABLED, Boolean.class);
+    }
+
 }
