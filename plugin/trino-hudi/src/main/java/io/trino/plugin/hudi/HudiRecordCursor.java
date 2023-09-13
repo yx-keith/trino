@@ -45,7 +45,7 @@ import static com.google.common.collect.Lists.newArrayList;
 import static io.trino.plugin.hive.HiveColumnHandle.ColumnType.REGULAR;
 import static io.trino.plugin.hive.util.HiveUtil.getInputFormatName;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CANNOT_OPEN_SPLIT;
-import static io.trino.plugin.hudi.HudiUtil.getLogFile;
+import static io.trino.plugin.hudi.HudiUtil.getFile;
 import static java.lang.String.format;
 import static java.util.stream.Collectors.joining;
 import static org.apache.hadoop.hive.serde2.ColumnProjectionUtils.*;
@@ -59,8 +59,8 @@ public class HudiRecordCursor
 {
     public static GenericHiveRecordCursor createRealTimeRecordCursor(ConnectorSession session, HdfsEnvironment hdfsEnvironment, HudiSplit split, Properties schema, List<HiveColumnHandle> columns, String basePath)
     {
-        HudiFile logFile = getLogFile(split);
-        Path logFilePath = new Path(logFile.getPath());
+        HudiFile hudiFile = getFile(split);
+        Path logFilePath = new Path(hudiFile.getPath());
 
         Configuration configuration = hdfsEnvironment.getConfiguration(new HdfsContext(session), new Path(basePath));
         return hdfsEnvironment.doAs(session.getIdentity(), () -> {
@@ -73,7 +73,7 @@ public class HudiRecordCursor
             return new GenericHiveRecordCursor(configuration,
                     logFilePath,
                     genericRecordReader(recordReader),
-                    logFile.getLength(),
+                    hudiFile.getLength(),
                     schema,
                     columns);
         });
@@ -92,7 +92,7 @@ public class HudiRecordCursor
         InputFormat<?, ?> inputFormat = getInputFormat(configuration, schema);
         JobConf jobConf = toJobConf(configuration);
 
-        HudiFile logFile = getLogFile(split);
+        HudiFile logFile = getFile(split);
         Path logFilePath = new Path(logFile.getPath());
         List<HoodieLogFile> logFiles = split.getLogFiles().stream().map(file -> new HoodieLogFile(file.getPath())).collect(Collectors.toList());
         FileSplit fileSplit = new FileSplit(logFilePath, logFile.getStart(), logFile.getLength(), (String[]) null);

@@ -91,7 +91,7 @@ public class HudiReadOptimizedDirectoryLister
     @Override
     public List<FileSlice> listFileSlices(HudiPartitionInfo partitionInfo, String commitTime)
     {
-        return fileSystemView.getLatestFileSlicesBeforeOrOn(partitionInfo.getRelativePartitionPath(), commitTime, false)
+        return fileSystemView.getLatestFileSlicesBeforeOrOn(partitionInfo.getRelativePartitionPath(), commitTime, true)
                 .collect(toImmutableList());
     }
 
