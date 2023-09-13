@@ -59,47 +59,38 @@ public class HudiSplitFactory
 
     public Stream<HudiSplit> createSplits(List<HivePartitionKey> partitionKeys, FileSlice fileSlice, String commitTime)
     {
-        Option<HoodieBaseFile> baseFile = fileSlice.getBaseFile();
-        if (COPY_ON_WRITE.equals(hudiTableHandle.getTableType()) && baseFile.isPresent()) {
-            FileStatus fileStatus = getFileStatus(baseFile.get());
+        Option<HoodieBaseFile> hudiBaseFile = fileSlice.getBaseFile();
+        if (COPY_ON_WRITE.equals(hudiTableHandle.getTableType()) && hudiBaseFile.isPresent()) {
+            FileStatus fileStatus = getFileStatus(hudiBaseFile.get());
             return createBaseSplitsFromFileStatus(partitionKeys, fileStatus, commitTime);
         }
-        else if (MERGE_ON_READ.equals(hudiTableHandle.getTableType()) && baseFile.isPresent() && !hudiMorSnapshotQueryEnabled) {
-            FileStatus fileStatus = getFileStatus(baseFile.get());
+        else if (MERGE_ON_READ.equals(hudiTableHandle.getTableType()) && hudiBaseFile.isPresent() && !hudiMorSnapshotQueryEnabled) {
+            FileStatus fileStatus = getFileStatus(hudiBaseFile.get());
             return createBaseSplitsFromFileStatus(partitionKeys, fileStatus, commitTime);
         }
         else if (MERGE_ON_READ.equals(hudiTableHandle.getTableType()) && hudiMorSnapshotQueryEnabled) {
             long logFileCount = fileSlice.getLogFiles().count();
-            if(baseFile.isPresent() && logFileCount <= 0) {
-                FileStatus fileStatus = getFileStatus(baseFile.get());
+            if (hudiBaseFile.isPresent() && logFileCount <= 0) {
+                FileStatus fileStatus = getFileStatus(hudiBaseFile.get());
                 return createBaseSplitsFromFileStatus(partitionKeys, fileStatus, commitTime);
-            }
-            else if (baseFile.isPresent()) {
-                FileStatus baseFileStatus = getFileStatus(baseFile.get());
-                Stream<HudiSplit> baseFileSplits = createBaseSplitsFromFileStatus(partitionKeys, baseFileStatus, commitTime);
+            } else if (hudiBaseFile.isPresent() || logFileCount > 0) {
+                HudiFile baseFile = hudiBaseFile.map(f -> new HudiFile(f.getPath(), 0, f.getFileSize(), f.getFileSize(), f.getFileStatus().getModificationTime())).orElse(null);
                 List<HudiFile> logFiles = fileSlice.getLogFiles()
                         .map(logFile -> new HudiFile(logFile.getPath().toString(), 0, logFile.getFileSize(), logFile.getFileSize(), logFile.getFileStatus().getModificationTime()))
                         .collect(Collectors.toList());
-                long splitSizeInBytes = logFiles.size() > 0 ? logFiles.stream().map(HudiFile::getLength).reduce(0L, Long::sum) : 0L;
-                Stream<HudiSplit> logFileSplits = createLogSplitsFromFileStatus(partitionKeys, logFiles, splitSizeInBytes, commitTime);
-                return Stream.concat(baseFileSplits, logFileSplits);
-            }
-            else if (logFileCount > 0) {
-                List<HudiFile> logFiles = fileSlice.getLogFiles()
-                        .map(logFile -> new HudiFile(logFile.getPath().toString(), 0, logFile.getFileSize(), logFile.getFileSize(), logFile.getFileStatus().getModificationTime()))
-                        .collect(Collectors.toList());
-                long splitSizeInBytes = logFiles.size() > 0 ? logFiles.stream().map(HudiFile::getLength).reduce(0L, Long::sum) : 0L;
-                return createLogSplitsFromFileStatus(partitionKeys, logFiles, splitSizeInBytes, commitTime);
+                long logFileSize = logFiles.size() > 0 ? logFiles.stream().map(HudiFile::getLength).reduce(0L, Long::sum) : 0L;
+                long fileSize = baseFile != null ? baseFile.getLength() + logFileSize : logFileSize;
+                return createLogSplitsFromFileStatus(partitionKeys, Optional.of(baseFile), logFiles, fileSize, commitTime);
             }
         }
         return Stream.empty();
     }
 
-    private Stream<HudiSplit> createLogSplitsFromFileStatus(List<HivePartitionKey> partitionKeys, List<HudiFile> logFiles, long splitSizeInBytes, String commitTime)
+    private Stream<HudiSplit> createLogSplitsFromFileStatus(List<HivePartitionKey> partitionKeys, Optional<HudiFile> baseFile, List<HudiFile> logFiles, long splitSizeInBytes, String commitTime)
     {
         return Stream.of(
                 new HudiSplit(
-                        Optional.empty(),
+                        baseFile,
                         logFiles,
                         ImmutableList.of(),
                         hudiTableHandle.getRegularPredicates(),

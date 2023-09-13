@@ -63,6 +63,7 @@ import static io.trino.plugin.hudi.HudiErrorCode.HUDI_UNKNOWN_TABLE_TYPE;
 import static io.trino.plugin.hudi.HudiSessionProperties.getColumnsToHide;
 import static io.trino.plugin.hudi.HudiTableProperties.LOCATION_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.PARTITIONED_BY_PROPERTY;
+import static io.trino.plugin.hudi.HudiUtil.getTableType;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static java.lang.String.format;
 import static java.util.Collections.singletonList;
@@ -113,7 +114,7 @@ public class HudiMetadata
                 tableName.getSchemaName(),
                 tableName.getTableName(),
                 table.get().getStorage().getLocation(),
-                HoodieTableType.COPY_ON_WRITE,
+                getTableType(table.get().getStorage().getStorageFormat().getInputFormat()),
                 TupleDomain.all(),
                 TupleDomain.all(),
                 getHiveSchema(table.get()));

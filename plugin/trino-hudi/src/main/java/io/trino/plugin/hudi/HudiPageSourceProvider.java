@@ -80,10 +80,9 @@ import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.getParquetMe
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.getParquetTupleDomain;
 import static io.trino.plugin.hive.util.HiveUtil.makePartName;
 import static io.trino.plugin.hudi.HudiErrorCode.*;
-import static io.trino.plugin.hudi.HudiSessionProperties.isParquetOptimizedReaderEnabled;
-import static io.trino.plugin.hudi.HudiSessionProperties.shouldUseParquetColumnNames;
+import static io.trino.plugin.hudi.HudiSessionProperties.*;
 import static io.trino.plugin.hudi.HudiUtil.getHudiFileFormat;
-import static io.trino.plugin.hudi.HudiUtil.getLogFile;
+import static io.trino.plugin.hudi.HudiUtil.getFile;
 import static io.trino.spi.predicate.Utils.nativeValueToBlock;
 import static io.trino.spi.type.StandardTypes.BIGINT;
 import static io.trino.spi.type.StandardTypes.BOOLEAN;
@@ -152,16 +151,22 @@ public class HudiPageSourceProvider
                 .map(HiveColumnHandle.class::cast)
                 .collect(toList());
 
+        boolean hudiMorSnapshotQueryEnabled = isHudiMorSnapshotQueryEnabled(session);
+
         if (COPY_ON_WRITE.equals(tableHandle.getTableType())) {
             HudiFile baseFile = split.getBaseFile().get();
             return createPageSourceFromBaseFile(baseFile, split, columns, session);
         } else if (MERGE_ON_READ.equals(tableHandle.getTableType())) {
-            List<HudiFile> logFiles = split.getLogFiles();
-            if (logFiles.isEmpty()) {
-                HudiFile baseFile = split.getBaseFile().get();
+            HudiFile baseFile = split.getBaseFile().get();
+            if(!hudiMorSnapshotQueryEnabled) {
                 return createPageSourceFromBaseFile(baseFile, split, columns, session);
             } else {
-                return createPageSourceFromLogFile(session, hdfsEnvironment, split, tableHandle.getSchema(), hiveColumns, tableHandle.getBasePath());
+                List<HudiFile> logFiles = split.getLogFiles();
+                if (logFiles.isEmpty()) {
+                    return createPageSourceFromBaseFile(baseFile, split, columns, session);
+                } else {
+                    return createPageSourceFromLogFile(session, hdfsEnvironment, split, tableHandle.getSchema(), hiveColumns, tableHandle.getBasePath());
+                }
             }
         } else {
             throw new TrinoException(HUDI_UNKNOWN_TABLE_TYPE, "Could not create page source for table type " + tableHandle.getTableType());
@@ -205,7 +210,7 @@ public class HudiPageSourceProvider
                 .map(column -> column.getHiveType().getType(typeManager))
                 .collect(toImmutableList());
 
-        HudiFile hudiFile = getLogFile(split);
+        HudiFile hudiFile = getFile(split);
         return new HudiPageSource(
                 toPartitionName(split.getPartitionKeys()),
                 columns,
