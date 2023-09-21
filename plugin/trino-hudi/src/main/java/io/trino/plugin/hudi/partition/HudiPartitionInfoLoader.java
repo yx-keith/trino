@@ -38,12 +38,12 @@ public class HudiPartitionInfoLoader
         this.hudiDirectoryLister = hudiDirectoryLister;
         this.partitionInfoQueue = partitionInfoQueue;
         this.partitionLoadStatusQueue = partitionLoadStatusQueue;
+        this.partitionLoadStatusQueue.offer(true);
     }
 
     @Override
     public void run()
     {
-        partitionLoadStatusQueue.offer(true);
         while (!partitionNamesQueue.isEmpty()) {
             List<String> partitionNames = partitionNamesQueue.poll();
             if (partitionNames != null) {
