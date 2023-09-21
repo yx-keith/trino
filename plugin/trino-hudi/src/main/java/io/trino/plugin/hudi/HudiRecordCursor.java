@@ -92,10 +92,10 @@ public class HudiRecordCursor
         InputFormat<?, ?> inputFormat = getInputFormat(configuration, schema);
         JobConf jobConf = toJobConf(configuration);
 
-        HudiFile logFile = getFile(split);
-        Path logFilePath = new Path(logFile.getPath());
+        HudiFile baseFile = getFile(split);
+        Path logFilePath = new Path(baseFile.getPath());
         List<HoodieLogFile> logFiles = split.getLogFiles().stream().map(file -> new HoodieLogFile(file.getPath())).collect(Collectors.toList());
-        FileSplit fileSplit = new FileSplit(logFilePath, logFile.getStart(), logFile.getLength(), (String[]) null);
+        FileSplit fileSplit = new FileSplit(logFilePath, baseFile.getStart(), baseFile.getLength(), (String[]) null);
 
         schema.stringPropertyNames().stream()
                 .forEach(name -> jobConf.set(name, schema.getProperty(name)));
@@ -112,8 +112,8 @@ public class HudiRecordCursor
         catch (IOException e) {
             throw new TrinoException(HUDI_CANNOT_OPEN_SPLIT, format("Error opening Hudi split %s (offset=%s, length=%s) using %s: %s",
                     logFilePath,
-                    logFile.getStart(),
-                    logFile.getLength(),
+                    baseFile.getStart(),
+                    baseFile.getLength(),
                     getInputFormatName(schema),
                     firstNonNull(e.getMessage(), e.getClass().getName())),
                     e);
