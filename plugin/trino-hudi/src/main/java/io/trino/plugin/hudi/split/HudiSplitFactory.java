@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.PathWithBootstrapFileStatus;
 
@@ -76,6 +77,7 @@ public class HudiSplitFactory
             } else if (hudiBaseFile.isPresent() || logFileCount > 0) {
                 HudiFile baseFile = hudiBaseFile.map(f -> new HudiFile(f.getPath(), 0, f.getFileSize(), f.getFileSize(), f.getFileStatus().getModificationTime())).orElse(null);
                 List<HudiFile> logFiles = fileSlice.getLogFiles()
+                        .sorted(HoodieLogFile.getLogFileComparator())
                         .map(logFile -> new HudiFile(logFile.getPath().toString(), 0, logFile.getFileSize(), logFile.getFileSize(), logFile.getFileStatus().getModificationTime()))
                         .collect(Collectors.toList());
                 long logFileSize = logFiles.size() > 0 ? logFiles.stream().map(HudiFile::getLength).reduce(0L, Long::sum) : 0L;
