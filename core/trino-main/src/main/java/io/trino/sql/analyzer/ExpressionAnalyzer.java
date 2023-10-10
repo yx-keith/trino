@@ -23,6 +23,7 @@ import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Streams;
 import io.trino.Session;
+import io.trino.SystemSessionProperties;
 import io.trino.execution.warnings.WarningCollector;
 import io.trino.metadata.OperatorNotFoundException;
 import io.trino.metadata.QualifiedObjectName;
@@ -38,21 +39,7 @@ import io.trino.spi.TrinoWarning;
 import io.trino.spi.function.BoundSignature;
 import io.trino.spi.function.FunctionMetadata;
 import io.trino.spi.function.OperatorType;
-import io.trino.spi.type.CharType;
-import io.trino.spi.type.DateType;
-import io.trino.spi.type.DecimalParseResult;
-import io.trino.spi.type.DecimalType;
-import io.trino.spi.type.Decimals;
-import io.trino.spi.type.RowType;
-import io.trino.spi.type.TimeType;
-import io.trino.spi.type.TimeWithTimeZoneType;
-import io.trino.spi.type.TimestampType;
-import io.trino.spi.type.TimestampWithTimeZoneType;
-import io.trino.spi.type.Type;
-import io.trino.spi.type.TypeId;
-import io.trino.spi.type.TypeNotFoundException;
-import io.trino.spi.type.TypeSignatureParameter;
-import io.trino.spi.type.VarcharType;
+import io.trino.spi.type.*;
 import io.trino.sql.PlannerContext;
 import io.trino.sql.analyzer.Analysis.PredicateCoercions;
 import io.trino.sql.analyzer.Analysis.Range;
@@ -214,9 +201,7 @@ import static io.trino.spi.StandardErrorCode.TOO_MANY_ARGUMENTS;
 import static io.trino.spi.StandardErrorCode.TYPE_MISMATCH;
 import static io.trino.spi.StandardErrorCode.TYPE_NOT_FOUND;
 import static io.trino.spi.connector.StandardWarningCode.DEPRECATED_FUNCTION;
-import static io.trino.spi.function.OperatorType.ADD;
-import static io.trino.spi.function.OperatorType.SUBSCRIPT;
-import static io.trino.spi.function.OperatorType.SUBTRACT;
+import static io.trino.spi.function.OperatorType.*;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DateType.DATE;
@@ -244,6 +229,7 @@ import static io.trino.sql.analyzer.SemanticExceptions.missingAttributeException
 import static io.trino.sql.analyzer.SemanticExceptions.semanticException;
 import static io.trino.sql.analyzer.TypeSignatureProvider.fromTypes;
 import static io.trino.sql.analyzer.TypeSignatureTranslator.toTypeSignature;
+import static io.trino.sql.analyzer.TypeSignatureTranslator.toSqlType;
 import static io.trino.sql.tree.DereferenceExpression.isQualifiedAllFieldsReference;
 import static io.trino.sql.tree.FrameBound.Type.CURRENT_ROW;
 import static io.trino.sql.tree.FrameBound.Type.FOLLOWING;
@@ -794,6 +780,9 @@ public class ExpressionAnalyzer
         @Override
         protected Type visitComparisonExpression(ComparisonExpression node, StackableAstVisitorContext<Context> context)
         {
+            if (SystemSessionProperties.isImplicitConversion(session)) {
+                node = implicitConversionRewriteForComparison(node, context);
+            }
             OperatorType operatorType = switch (node.getOperator()) {
                 case EQUAL, NOT_EQUAL -> OperatorType.EQUAL;
                 case LESS_THAN, GREATER_THAN -> OperatorType.LESS_THAN;
@@ -802,6 +791,42 @@ public class ExpressionAnalyzer
             };
 
             return getOperator(context, node, operatorType, node.getLeft(), node.getRight());
+        }
+
+        private ComparisonExpression implicitConversionRewriteForComparison(ComparisonExpression node, StackableAstVisitorContext<Context> context) {
+            Expression left = node.getLeft();
+            Expression right = node.getRight();
+
+            if (left instanceof Cast || right instanceof Cast) {
+                return node;
+            }
+
+            Type leftType = process(left, context);
+            Type rightType = process(right, context);
+            //trino have already support the same data type ,digital type and character type.
+            //so wo don't need to implicit conversion for these types.
+            if (!(leftType.getTypeSignature().getBase().equals(rightType.getTypeSignature().getBase())
+                || (TypeCoercion.isDigitalTypeBase(leftType) && TypeCoercion.isDigitalTypeBase(rightType))
+                || (TypeCoercion.isCharacterTypeBase(leftType) && TypeCoercion.isCharacterTypeBase(rightType)))) {
+
+                if (TypeCoercion.isDigitalTypeBase(leftType) && rightType.getTypeSignature().getBase().equals(StandardTypes.VARCHAR)) {
+                    Expression cast = new Cast(left, toSqlType(VARCHAR));
+                    node.setLeft(cast);
+                }
+                else if (TypeCoercion.isDigitalTypeBase(rightType) && leftType.getTypeSignature().getBase().equals(StandardTypes.VARCHAR)) {
+                    Expression cast = new Cast(left, toSqlType(VARCHAR));
+                    node.setRight(cast);
+                }
+                else if (TypeCoercion.canCoerceWithCast(leftType, rightType)) {
+                    Expression cast = new Cast(left, toSqlType(rightType));
+                    node.setLeft(cast);
+                }
+                else if (TypeCoercion.canCoerceWithCast(rightType, leftType)) {
+                    Expression cast = new Cast(right, toSqlType(leftType));
+                    node.setRight(cast);
+                }
+            }
+            return node;
         }
 
         @Override
@@ -956,7 +981,62 @@ public class ExpressionAnalyzer
         @Override
         protected Type visitArithmeticBinary(ArithmeticBinaryExpression node, StackableAstVisitorContext<Context> context)
         {
+            if (SystemSessionProperties.isImplicitConversion(session)) {
+                node = implicitConversionRewriteForArithmetic(node, context);
+            }
             return getOperator(context, node, OperatorType.valueOf(node.getOperator().name()), node.getLeft(), node.getRight());
+        }
+
+        private ArithmeticBinaryExpression implicitConversionRewriteForArithmetic(ArithmeticBinaryExpression node, StackableAstVisitorContext<Context> context) {
+            Expression left = node.getLeft();
+            Expression right = node.getRight();
+
+            if (left instanceof ArithmeticBinaryExpression) {
+                ArithmeticBinaryExpression leftExpression = implicitConversionRewriteForArithmetic((ArithmeticBinaryExpression) left, context);
+                node.setLeft(leftExpression);
+            }
+            if (right instanceof ArithmeticBinaryExpression) {
+                ArithmeticBinaryExpression rightExpression = implicitConversionRewriteForArithmetic((ArithmeticBinaryExpression) right, context);
+                node.setRight(rightExpression);
+            }
+
+            if (left instanceof Cast || right instanceof Cast) {
+                return node;
+            }
+
+            Type leftType = process(left, context);
+            Type rightType = process(right, context);
+            //trino have already support digital type.So we don't need to implicit conversion these types
+            if (!(TypeCoercion.isDigitalTypeBase(leftType) && TypeCoercion.isDigitalTypeBase(rightType))) {
+                if (TypeCoercion.isDigitalTypeBase(leftType)) {
+                    Expression cast = new Cast(right, toSqlType(DOUBLE));
+                    node.setRight(cast);
+                }
+                else if (TypeCoercion.isDigitalTypeBase(rightType)) {
+                    Expression cast = new Cast(left, toSqlType(DOUBLE));
+                    node.setLeft(cast);
+                }
+                else {
+                    Expression castR = new Cast(right, toSqlType(DOUBLE));
+                    node.setRight(castR);
+                    Expression castL = new Cast(left, toSqlType(DOUBLE));
+                    node.setLeft(castL);
+                }
+            }
+            else {
+                //support divide e.g  1/2=0  ->  1/2=0.5
+                if (node.getOperator() == ArithmeticBinaryExpression.Operator.DIVIDE) {
+                    if (!leftType.getTypeSignature().getBase().equals(StandardTypes.DOUBLE)) {
+                        Expression cast = new Cast(left, toSqlType(DOUBLE));
+                        node.setLeft(cast);
+                    }
+                    if (!rightType.getTypeSignature().getBase().equals(StandardTypes.DOUBLE)) {
+                        Expression cast = new Cast(right, toSqlType(DOUBLE));
+                        node.setRight(cast);
+                    }
+                }
+            }
+            return node;
         }
 
         @Override
@@ -1187,15 +1267,20 @@ public class ExpressionAnalyzer
         @Override
         protected Type visitFunctionCall(FunctionCall node, StackableAstVisitorContext<Context> context)
         {
+            if (SystemSessionProperties.isImplicitConversion(session)) {
+                node = implicitConversionRewriteForConcat(node, context);
+            }
+
             boolean isRowPatternCount = context.getContext().isPatternRecognition() &&
                     plannerContext.getMetadata().isAggregationFunction(session, node.getName()) &&
                     node.getName().getSuffix().equalsIgnoreCase("count");
             // argument of the form `label.*` is only allowed for row pattern count function
+            int size = node.getArguments().size();
             node.getArguments().stream()
                     .filter(DereferenceExpression::isQualifiedAllFieldsReference)
                     .findAny()
                     .ifPresent(allRowsReference -> {
-                        if (!isRowPatternCount || node.getArguments().size() > 1) {
+                        if (!isRowPatternCount || size > 1) {
                             throw semanticException(INVALID_FUNCTION_ARGUMENT, allRowsReference, "label.* syntax is only supported as the only argument of row pattern count function");
                         }
                     });
@@ -1321,6 +1406,63 @@ public class ExpressionAnalyzer
 
             Type type = signature.getReturnType();
             return setExpressionType(node, type);
+        }
+
+        private FunctionCall implicitConversionRewriteForConcat(FunctionCall node, StackableAstVisitorContext<Context> context) {
+            if (!node.getName().toString().equals("concat"))
+                return node;
+
+            List<Expression> arguments = node.getArguments();
+            Expression leftExpression = arguments.get(0);
+            Expression rightExpression = arguments.get(1);
+            List<Expression> newArguments = new ArrayList<>(arguments);
+            if (leftExpression instanceof FunctionCall) {
+                Expression functionCall = implicitConversionRewriteForConcat((FunctionCall) leftExpression, context);
+                newArguments.set(0, functionCall);
+            }
+            if (rightExpression instanceof FunctionCall) {
+                Expression functionCall = implicitConversionRewriteForConcat((FunctionCall) rightExpression, context);
+                newArguments.set(1, functionCall);
+            }
+
+            if (leftExpression instanceof Cast || rightExpression instanceof Cast)
+                return node;
+
+            Type leftType = process(leftExpression, context);
+            Type rightType = process(rightExpression, context);
+
+            //trino have already support char, varchar and varbinary types.and also supports the types
+            //the left and right can be different, but the types are both char or varchar.
+            if (!(leftType.getTypeSignature().getBase().equals(rightType.getTypeSignature().getBase()) && TypeCoercion.isConcatTypeBase(leftType))) {
+                // if left type is array type, try to convert right type to array element type.
+                if (leftType.getTypeSignature().getBase().equals(StandardTypes.ARRAY)) {
+                    Type elementType = ((ArrayType) leftType).getElementType();
+                    Expression cast = new Cast(rightExpression, toSqlType(elementType));
+                    newArguments.set(1, cast);
+                }
+                // If right type is array type, try to convert left type to array element type.
+                else if (rightType.getTypeSignature().getBase().equals(StandardTypes.ARRAY)) {
+                    Type elementType = ((ArrayType) rightType).getElementType();
+                    Expression cast = new Cast(leftExpression, toSqlType(elementType));
+                    newArguments.set(0, cast);
+                }
+                // For other types, try to convert both right and left types to varchar type
+                else {
+                    if (TypeCoercion.canCoerceWithCast(leftType, VARCHAR)
+                        && TypeCoercion.canCoerceWithCast(rightType, VARCHAR)) {
+                        if (!leftType.getTypeSignature().getBase().equals(StandardTypes.VARCHAR)) {
+                            Expression cast = new Cast(leftExpression, toSqlType(VARCHAR));
+                            newArguments.set(0, cast);
+                        }
+                        if (!rightType.getTypeSignature().getBase().equals(StandardTypes.VARCHAR)) {
+                            Expression cast = new Cast(rightExpression, toSqlType(VARCHAR));
+                            newArguments.set(1, cast);
+                        }
+                    }
+                }
+            }
+            node.setArguments(newArguments);
+            return node;
         }
 
         private void analyzeWindow(ResolvedWindow window, StackableAstVisitorContext<Context> context, Node originalNode)
@@ -2150,6 +2292,24 @@ public class ExpressionAnalyzer
             Type valueType = process(node.getValue(), context);
             Type minType = process(node.getMin(), context);
             Type maxType = process(node.getMax(), context);
+
+            if (SystemSessionProperties.isImplicitConversion(session)) {
+                // Same type or digital type or character type, don't need to convert
+                if (!(valueType.getTypeSignature().getBase().equals(minType.getTypeSignature().getBase()) && valueType.getTypeSignature().getBase().equals(maxType.getTypeSignature().getBase())
+                    || (TypeCoercion.isDigitalTypeBase(valueType) && TypeCoercion.isDigitalTypeBase(minType) && TypeCoercion.isDigitalTypeBase(maxType))
+                    || (TypeCoercion.isCharacterTypeBase(valueType) && TypeCoercion.isCharacterTypeBase(minType) && TypeCoercion.isCharacterTypeBase(maxType)))) {
+                    if (!minType.getTypeSignature().getBase().equals(valueType.getTypeSignature().getBase())
+                        && TypeCoercion.canCoerceWithCast(minType, valueType)) {
+                        Expression cast = new Cast(node.getMin(), toSqlType(valueType));
+                        node.setMin(cast);
+                    }
+                    if (!maxType.getTypeSignature().getBase().equals(valueType.getTypeSignature().getBase())
+                            && TypeCoercion.canCoerceWithCast(maxType, valueType)) {
+                        Expression cast = new Cast(node.getMax(), toSqlType(valueType));
+                        node.setMax(cast);
+                    }
+                }
+            }
 
             Optional<Type> commonType = typeCoercion.getCommonSuperType(valueType, minType)
                     .flatMap(type -> typeCoercion.getCommonSuperType(type, maxType));
