@@ -32,7 +32,7 @@ public class FunctionCall
     private final boolean distinct;
     private final Optional<NullTreatment> nullTreatment;
     private final Optional<ProcessingMode> processingMode;
-    private final List<Expression> arguments;
+    private List<Expression> arguments;
 
     public FunctionCall(QualifiedName name, List<Expression> arguments)
     {
@@ -108,6 +108,11 @@ public class FunctionCall
     public List<Expression> getArguments()
     {
         return arguments;
+    }
+
+    public void setArguments(List<Expression> arguments)
+    {
+        this.arguments = arguments;
     }
 
     public Optional<Expression> getFilter()

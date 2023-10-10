@@ -178,6 +178,7 @@ public final class SystemSessionProperties
     public static final String FAULT_TOLERANT_EXECUTION_EVENT_DRIVEN_SCHEDULER_ENABLED = "fault_tolerant_execution_event_driven_scheduler_enabled";
     public static final String FAULT_TOLERANT_EXECUTION_FORCE_PREFERRED_WRITE_PARTITIONING_ENABLED = "fault_tolerant_execution_force_preferred_write_partitioning_enabled";
     public static final String PAGE_PARTITIONING_BUFFER_POOL_SIZE = "page_partitioning_buffer_pool_size";
+    public static final String isImplicitConversion = "implicit_conversion";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -884,7 +885,12 @@ public final class SystemSessionProperties
                 integerProperty(PAGE_PARTITIONING_BUFFER_POOL_SIZE,
                         "Maximum number of free buffers in the per task partitioned page buffer pool. Setting this to zero effectively disables the pool",
                         taskManagerConfig.getPagePartitioningBufferPoolSize(),
-                        true));
+                        true),
+                booleanProperty(
+                        isImplicitConversion,
+                        "Enable implicit conversion",
+                        featuresConfig.isImplicitConversion(),
+                        false));
     }
 
     @Override
@@ -1580,5 +1586,10 @@ public final class SystemSessionProperties
     public static int getPagePartitioningBufferPoolSize(Session session)
     {
         return session.getSystemProperty(PAGE_PARTITIONING_BUFFER_POOL_SIZE, Integer.class);
+    }
+
+    public static boolean isImplicitConversion(Session session)
+    {
+        return session.getSystemProperty(isImplicitConversion, Boolean.class);
     }
 }
