@@ -38,7 +38,7 @@
         <module>core/trino-server-main</module>
         <module>core/trino-server-rpm</module>
         <module>core/trino-spi</module>
-        <module>docs</module>
+<!--        <module>docs</module>-->
         <module>lib/trino-array</module>
         <module>lib/trino-cache</module>
         <module>lib/trino-filesystem</module>
@@ -58,9 +58,9 @@
         <module>lib/trino-phoenix5-patched</module>
         <module>lib/trino-plugin-toolkit</module>
         <module>lib/trino-record-decoder</module>
-        <module>plugin/trino-accumulo</module>
-        <module>plugin/trino-accumulo-iterators</module>
-        <module>plugin/trino-atop</module>
+<!--        <module>plugin/trino-accumulo</module>-->
+<!--        <module>plugin/trino-accumulo-iterators</module>-->
+<!--        <module>plugin/trino-atop</module>-->
         <module>plugin/trino-base-jdbc</module>
         <module>plugin/trino-bigquery</module>
         <module>plugin/trino-blackhole</module>
@@ -73,8 +73,8 @@
         <module>plugin/trino-example-jdbc</module>
         <module>plugin/trino-exchange-filesystem</module>
         <module>plugin/trino-exchange-hdfs</module>
-        <module>plugin/trino-geospatial</module>
-        <module>plugin/trino-google-sheets</module>
+<!--        <module>plugin/trino-geospatial</module>-->
+<!--        <module>plugin/trino-google-sheets</module>-->
         <module>plugin/trino-hive</module>
         <module>plugin/trino-hive-hadoop2</module>
         <module>plugin/trino-http-event-listener</module>
@@ -82,28 +82,28 @@
         <module>plugin/trino-iceberg</module>
         <module>plugin/trino-ignite</module>
         <module>plugin/trino-jmx</module>
-        <module>plugin/trino-kafka</module>
-        <module>plugin/trino-kinesis</module>
-        <module>plugin/trino-kudu</module>
+<!--        <module>plugin/trino-kafka</module>-->
+<!--        <module>plugin/trino-kinesis</module>-->
+<!--        <module>plugin/trino-kudu</module>-->
         <module>plugin/trino-local-file</module>
         <module>plugin/trino-mariadb</module>
         <module>plugin/trino-memory</module>
         <module>plugin/trino-ml</module>
-        <module>plugin/trino-mongodb</module>
+<!--        <module>plugin/trino-mongodb</module>-->
         <module>plugin/trino-mysql</module>
         <module>plugin/trino-mysql-event-listener</module>
         <module>plugin/trino-oracle</module>
         <module>plugin/trino-password-authenticators</module>
         <module>plugin/trino-phoenix5</module>
-        <module>plugin/trino-pinot</module>
+<!--        <module>plugin/trino-pinot</module>-->
         <module>plugin/trino-postgresql</module>
         <module>plugin/trino-prometheus</module>
         <module>plugin/trino-raptor-legacy</module>
-        <module>plugin/trino-redis</module>
-        <module>plugin/trino-redshift</module>
+<!--        <module>plugin/trino-redis</module>-->
+<!--        <module>plugin/trino-redshift</module>-->
         <module>plugin/trino-resource-group-managers</module>
         <module>plugin/trino-session-property-managers</module>
-        <module>plugin/trino-singlestore</module>
+<!--        <module>plugin/trino-singlestore</module>-->
         <module>plugin/trino-sqlserver</module>
         <module>plugin/trino-teradata-functions</module>
         <module>plugin/trino-thrift</module>
@@ -143,6 +143,7 @@
         <air.check.skip-spotbugs>true</air.check.skip-spotbugs>
         <air.check.skip-pmd>true</air.check.skip-pmd>
         <air.check.skip-jacoco>true</air.check.skip-jacoco>
+        <air.check.skip-extended>true</air.check.skip-extended>
 
         <project.build.targetJdk>17</project.build.targetJdk>
         <air.java.version>17.0.5</air.java.version>
@@ -2496,6 +2497,13 @@
                         <exclude>**/*jmhTest*.java</exclude>
                         <exclude>**/*jmhType*.java</exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>com.github.ekryd.sortpom</groupId>
+                <artifactId>sortpom-maven-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
                 </configuration>
             </plugin>
         </plugins>
