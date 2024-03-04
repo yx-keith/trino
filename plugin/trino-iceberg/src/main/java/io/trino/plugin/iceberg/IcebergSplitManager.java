@@ -34,8 +34,7 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.TableScan;
 
 import static com.google.common.util.concurrent.MoreExecutors.newDirectExecutorService;
-import static io.trino.plugin.iceberg.IcebergSessionProperties.getDynamicFilteringWaitTimeout;
-import static io.trino.plugin.iceberg.IcebergSessionProperties.getMinimumAssignedSplitWeight;
+import static io.trino.plugin.iceberg.IcebergSessionProperties.*;
 import static io.trino.spi.connector.FixedSplitSource.emptySplitSource;
 import static java.util.Objects.requireNonNull;
 
@@ -98,7 +97,8 @@ public class IcebergSplitManager
                 constraint,
                 typeManager,
                 table.isRecordScannedFiles(),
-                getMinimumAssignedSplitWeight(session));
+                getMinimumAssignedSplitWeight(session),
+                isIcebergSplitsCombineEnabled(session));
 
         return new ClassLoaderSafeConnectorSplitSource(splitSource, IcebergSplitManager.class.getClassLoader());
     }

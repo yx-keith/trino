@@ -74,6 +74,7 @@ public class IcebergConfig
     private Optional<String> materializedViewsStorageSchema = Optional.empty();
     private boolean sortedWritingEnabled = true;
     private boolean queryPartitionFilterRequired;
+    private boolean icebergSplitsCombineEnbled;
 
     public CatalogType getCatalogType()
     {
@@ -380,5 +381,17 @@ public class IcebergConfig
     public boolean isQueryPartitionFilterRequired()
     {
         return queryPartitionFilterRequired;
+    }
+
+    public boolean isIcebergSplitsCombineEnbled()
+    {
+        return icebergSplitsCombineEnbled;
+    }
+
+    @Config("iceberg.splits-combine.enabled")
+    public IcebergConfig setIcebergSplitsCombineEnbled(boolean icebergSplitsCombineEnbled)
+    {
+        this.icebergSplitsCombineEnbled = icebergSplitsCombineEnbled;
+        return this;
     }
 }
