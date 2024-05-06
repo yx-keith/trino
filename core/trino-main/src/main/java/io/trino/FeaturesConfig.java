@@ -106,6 +106,7 @@ public class FeaturesConfig
     private boolean forceSpillingJoin;
 
     private boolean faultTolerantExecutionExchangeEncryptionEnabled = true;
+    private boolean isImplicitConversion;
 
     public enum DataIntegrityVerification
     {
@@ -500,5 +501,17 @@ public class FeaturesConfig
     public void applyFaultTolerantExecutionDefaults()
     {
         exchangeCompressionEnabled = true;
+    }
+
+    public boolean isImplicitConversion()
+    {
+        return isImplicitConversion;
+    }
+
+    @Config("implicit-conversion")
+    public FeaturesConfig setImplicitConversion(boolean isImplicitConversion)
+    {
+        this.isImplicitConversion = isImplicitConversion;
+        return this;
     }
 }
