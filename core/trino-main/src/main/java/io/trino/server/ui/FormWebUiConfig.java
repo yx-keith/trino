@@ -26,6 +26,36 @@ public class FormWebUiConfig
 {
     private Optional<String> sharedSecret = Optional.empty();
     private Duration sessionTimeout = new Duration(1, DAYS);
+    private String webLoginPasssWord;
+    private String webLoginUser;
+    private boolean webUiLogInPasswordEnabled = true;
+
+    public boolean isWebUiLogInPasswordEnabled() {
+        return webUiLogInPasswordEnabled;
+    }
+
+    @Config("web-ui.login-password-enabled")
+    public void setWebUiLogInPasswordEnabled(boolean webUiLogInPasswordEnabled) {
+        this.webUiLogInPasswordEnabled = webUiLogInPasswordEnabled;
+    }
+
+    public String getWebLoginUser() {
+        return webLoginUser;
+    }
+
+    @Config("web-ui.login-user")
+    public void setWebLoginUser(String webLoginUser) {
+        this.webLoginUser = webLoginUser;
+    }
+
+    public String getWebLoginPasssWord() {
+        return webLoginPasssWord;
+    }
+
+    @Config("web-ui.login-password")
+    public void setWebLoginPasssWord(String webLoginPasssWord) {
+        this.webLoginPasssWord = webLoginPasssWord;
+    }
 
     @NotNull
     public Optional<String> getSharedSecret()
