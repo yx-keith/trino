@@ -70,6 +70,9 @@ public class FormWebUiAuthenticationFilter
     private final Function<String, String> jwtGenerator;
     private final FormAuthenticator formAuthenticator;
     private final Optional<Authenticator> authenticator;
+    private final String webUiLoginUser;
+    private final String webUiLoginPassword;
+    private final boolean webUiLogInPasswordEnabled;
 
     @Inject
     public FormWebUiAuthenticationFilter(
@@ -87,6 +90,9 @@ public class FormWebUiAuthenticationFilter
         }
         Key hmac = hmacShaKeyFor(hmacBytes);
 
+        this.webUiLoginUser = config.getWebLoginUser();
+        this.webUiLoginPassword = config.getWebLoginPasssWord();
+        this.webUiLogInPasswordEnabled = config.isWebUiLogInPasswordEnabled();
         this.jwtParser = newJwtParserBuilder()
                 .setSigningKey(hmac)
                 .requireAudience(TRINO_UI_AUDIENCE)
@@ -116,7 +122,7 @@ public class FormWebUiAuthenticationFilter
         }
 
         // login and logout resource is not visible to protocol authenticators
-        if ((path.equals(UI_LOGIN) && request.getMethod().equals("POST")) || path.equals(UI_LOGOUT)) {
+        if (path.equals(UI_LOGIN) && request.getMethod().equals("POST")) {
             return;
         }
 
@@ -228,6 +234,12 @@ public class FormWebUiAuthenticationFilter
 
     public Optional<NewCookie> checkLoginCredentials(String username, String password, boolean secure)
     {
+        if (this.webUiLogInPasswordEnabled) {
+            if (!username.equals(webUiLoginUser) || !password.equals(webUiLoginPassword)) {
+                return Optional.empty();
+            }
+        }
+
         return formAuthenticator.isValidCredential(username, password, secure)
                 .map(user -> createAuthenticationCookie(user, secure));
     }
