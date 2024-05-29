@@ -24,10 +24,7 @@ import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
 
-import java.util.Arrays;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -44,6 +41,7 @@ public class AuthenticationFilter
     private final InternalAuthenticationManager internalAuthenticationManager;
     private final boolean insecureAuthenticationOverHttpAllowed;
     private final InsecureAuthenticator insecureAuthenticator;
+    private final String password;
 
     @Inject
     public AuthenticationFilter(
@@ -57,6 +55,7 @@ public class AuthenticationFilter
         this.internalAuthenticationManager = requireNonNull(internalAuthenticationManager, "internalAuthenticationManager is null");
         insecureAuthenticationOverHttpAllowed = securityConfig.isInsecureAuthenticationOverHttpAllowed();
         this.insecureAuthenticator = requireNonNull(insecureAuthenticator, "insecureAuthenticator is null");
+        this.password = securityConfig.getPassword();
     }
 
     @Override
@@ -85,6 +84,12 @@ public class AuthenticationFilter
         for (Authenticator authenticator : authenticators) {
             Identity authenticatedIdentity;
             try {
+                if (authenticator instanceof InsecureAuthenticator) {
+                    Optional<BasicAuthCredentials> basicAuthCredentials = BasicAuthCredentials.extractBasicAuthCredentials(request);
+                    if (!basicAuthCredentials.get().getPassword().get().equals(this.password)) {
+                        throw new AuthenticationException("password is not correct");
+                    }
+                }
                 authenticatedIdentity = authenticator.authenticate(request);
             }
             catch (AuthenticationException e) {

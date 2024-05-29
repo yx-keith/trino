@@ -24,6 +24,7 @@ import io.trino.client.auth.external.HttpTokenPoller;
 import io.trino.client.auth.external.KnownToken;
 import io.trino.client.auth.external.RedirectHandler;
 import io.trino.client.auth.external.TokenPoller;
+import okhttp3.Credentials;
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
 
@@ -172,11 +173,10 @@ public class QueryRunner
             Optional<String> user,
             Optional<String> password)
     {
-        if (user.isPresent() && password.isPresent()) {
-            checkArgument(session.getServer().getScheme().equalsIgnoreCase("https"),
-                    "Authentication using username/password requires HTTPS to be enabled");
-            clientBuilder.addInterceptor(basicAuth(user.get(), password.get()));
+        if (!password.isPresent() || !user.isPresent()) {
+            throw new IllegalArgumentException("Authentication must use username and password");
         }
+        clientBuilder.addInterceptor(basicAuth(user.get(), password.get()));
     }
 
     private static void setupExternalAuth(

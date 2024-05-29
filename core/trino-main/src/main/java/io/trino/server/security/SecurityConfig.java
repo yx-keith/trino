@@ -37,6 +37,15 @@ public class SecurityConfig
     private List<String> authenticationTypes = ImmutableList.of("insecure");
     private Optional<String> fixedManagementUser = Optional.empty();
     private boolean fixedManagementUserForHttps;
+    private String password;
+
+    public String getPassword() {
+        return password;
+    }
+    @Config("http-server.password")
+    public void setPassword(String password) {
+        this.password = password;
+    }
 
     public boolean isInsecureAuthenticationOverHttpAllowed()
     {

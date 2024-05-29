@@ -268,12 +268,11 @@ public final class TrinoDriverUri
 
             // TODO: fix Tempto to allow empty passwords
             String password = PASSWORD.getValue(properties).orElse("");
-            if (!password.isEmpty() && !password.equals("***empty***")) {
-                if (!useSecureConnection) {
-                    throw new SQLException("Authentication using username/password requires SSL to be enabled");
-                }
-                builder.addInterceptor(basicAuth(getRequiredUser(), password));
+            String user = USER.getValue(properties).orElse("");
+            if (password.isEmpty() || password.equals("***empty***") || user.isEmpty()) {
+                throw new SQLException("Authentication must use username/password ");
             }
+            builder.addInterceptor(basicAuth(user, password));
 
             if (useSecureConnection) {
                 SslVerificationMode sslVerificationMode = SSL_VERIFICATION.getValue(properties).orElse(FULL);
