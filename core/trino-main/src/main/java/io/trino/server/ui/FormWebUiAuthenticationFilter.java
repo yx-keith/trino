@@ -18,6 +18,7 @@ import com.google.common.hash.Hashing;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.JwtParser;
 import io.trino.server.security.AuthenticationException;
+import io.trino.server.security.AuthenticationFilter;
 import io.trino.server.security.Authenticator;
 import io.trino.spi.security.Identity;
 
@@ -36,6 +37,7 @@ import java.security.Key;
 import java.security.SecureRandom;
 import java.time.ZonedDateTime;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -43,6 +45,7 @@ import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Strings.emptyToNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static io.jsonwebtoken.security.Keys.hmacShaKeyFor;
+import static io.trino.plugin.password.file.EncryptionUtil.doesBCryptPasswordMatch;
 import static io.trino.server.ServletSecurityUtils.sendWwwAuthenticate;
 import static io.trino.server.ServletSecurityUtils.setAuthenticatedIdentity;
 import static io.trino.server.security.jwt.JwtUtil.newJwtBuilder;
@@ -71,7 +74,7 @@ public class FormWebUiAuthenticationFilter
     private final FormAuthenticator formAuthenticator;
     private final Optional<Authenticator> authenticator;
     private final String webUiLoginUser;
-    private final String webUiLoginPassword;
+    private final String hashedPassword;
     private final boolean webUiLogInPasswordEnabled;
 
     @Inject
@@ -91,8 +94,10 @@ public class FormWebUiAuthenticationFilter
         Key hmac = hmacShaKeyFor(hmacBytes);
 
         this.webUiLoginUser = config.getWebLoginUser();
-        this.webUiLoginPassword = config.getWebLoginPasssWord();
+        List<String> lines = AuthenticationFilter.readPasswordFile(config.getWebLoginPassswordFile());
+        this.hashedPassword = AuthenticationFilter.loadPasswordFile(lines);
         this.webUiLogInPasswordEnabled = config.isWebUiLogInPasswordEnabled();
+
         this.jwtParser = newJwtParserBuilder()
                 .setSigningKey(hmac)
                 .requireAudience(TRINO_UI_AUDIENCE)
@@ -235,7 +240,7 @@ public class FormWebUiAuthenticationFilter
     public Optional<NewCookie> checkLoginCredentials(String username, String password, boolean secure)
     {
         if (this.webUiLogInPasswordEnabled) {
-            if (!username.equals(webUiLoginUser) || !password.equals(webUiLoginPassword)) {
+            if (!username.equals(webUiLoginUser) || !doesBCryptPasswordMatch(password, hashedPassword)) {
                 return Optional.empty();
             }
         }
