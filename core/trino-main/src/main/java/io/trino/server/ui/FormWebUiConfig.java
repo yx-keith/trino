@@ -14,10 +14,13 @@
 package io.trino.server.ui;
 
 import io.airlift.configuration.Config;
+import io.airlift.configuration.validation.FileExists;
 import io.airlift.units.Duration;
+import io.trino.plugin.password.file.FileConfig;
 
 import javax.validation.constraints.NotNull;
 
+import java.io.File;
 import java.util.Optional;
 
 import static java.util.concurrent.TimeUnit.DAYS;
@@ -26,7 +29,8 @@ public class FormWebUiConfig
 {
     private Optional<String> sharedSecret = Optional.empty();
     private Duration sessionTimeout = new Duration(1, DAYS);
-    private String webLoginPasssWord;
+
+    private File webLoginPassswordFile;
     private String webLoginUser;
     private boolean webUiLogInPasswordEnabled = true;
 
@@ -48,13 +52,16 @@ public class FormWebUiConfig
         this.webLoginUser = webLoginUser;
     }
 
-    public String getWebLoginPasssWord() {
-        return webLoginPasssWord;
+    @NotNull
+    @FileExists
+    public File getWebLoginPassswordFile() {
+        return webLoginPassswordFile;
     }
 
-    @Config("web-ui.login-password")
-    public void setWebLoginPasssWord(String webLoginPasssWord) {
-        this.webLoginPasssWord = webLoginPasssWord;
+    @Config("web-ui.login-passwordFile")
+    public FormWebUiConfig setWebLoginPassswordFile(File webLoginPassswordFile) {
+        this.webLoginPassswordFile = webLoginPassswordFile;
+        return this;
     }
 
     @NotNull

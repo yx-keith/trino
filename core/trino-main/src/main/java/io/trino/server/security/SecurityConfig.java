@@ -22,6 +22,7 @@ import io.airlift.configuration.DefunctConfig;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 
+import java.io.File;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,6 +38,17 @@ public class SecurityConfig
     private List<String> authenticationTypes = ImmutableList.of("insecure");
     private Optional<String> fixedManagementUser = Optional.empty();
     private boolean fixedManagementUserForHttps;
+    private File passwordFile;
+
+    public File getPasswordFile() {
+        return passwordFile;
+    }
+
+    @Config("http-server.password-file")
+    public SecurityConfig setPasswordFile(File passwordFile) {
+        this.passwordFile = passwordFile;
+        return this;
+    }
 
     public boolean isInsecureAuthenticationOverHttpAllowed()
     {
