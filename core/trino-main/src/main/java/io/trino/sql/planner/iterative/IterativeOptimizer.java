@@ -31,6 +31,7 @@ import io.trino.execution.warnings.WarningCollector;
 import io.trino.matching.Capture;
 import io.trino.matching.Match;
 import io.trino.matching.Pattern;
+import io.trino.metadata.MetadataManager;
 import io.trino.spi.TrinoException;
 import io.trino.spi.eventlistener.QueryPlanOptimizerStatistics;
 import io.trino.sql.PlannerContext;
@@ -72,6 +73,7 @@ public class IterativeOptimizer
     private final RuleIndex ruleIndex;
     private final Predicate<Session> useLegacyRules;
     private final PlannerContext plannerContext;
+    private MetadataManager metadataManager;
 
     public IterativeOptimizer(PlannerContext plannerContext, RuleStatsRecorder stats, StatsCalculator statsCalculator, CostCalculator costCalculator, Set<Rule<?>> rules)
     {
@@ -106,7 +108,7 @@ public class IterativeOptimizer
             return plan;
         }
 
-        Memo memo = new Memo(context.idAllocator(), plan);
+        Memo memo = new Memo(context.idAllocator(), plan, context.session(), metadataManager);
         Lookup lookup = Lookup.from(planNode -> Stream.of(memo.resolve(planNode)));
 
         Duration timeout = SystemSessionProperties.getOptimizerTimeout(context.session());
@@ -318,6 +320,12 @@ public class IterativeOptimizer
                 return context.warningCollector;
             }
         };
+    }
+
+    public IterativeOptimizer setMetadataManager(MetadataManager metadataManager)
+    {
+        this.metadataManager = metadataManager;
+        return this;
     }
 
     private static class Context

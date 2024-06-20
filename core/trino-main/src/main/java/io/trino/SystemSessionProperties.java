@@ -97,6 +97,8 @@ public final class SystemSessionProperties
     public static final String SPATIAL_JOIN = "spatial_join";
     public static final String SPATIAL_PARTITIONING_TABLE_NAME = "spatial_partitioning_table_name";
     public static final String COLOCATED_JOIN = "colocated_join";
+    public static final String JOIN_FIXED_ORDER = "join_fixed_order";
+    public static final String FIX_JOIN_ORDER= "fix_join_order";
     public static final String JOIN_REORDERING_STRATEGY = "join_reordering_strategy";
     public static final String MAX_REORDERED_JOINS = "max_reordered_joins";
     public static final String INITIAL_SPLITS_PER_NODE = "initial_splits_per_node";
@@ -470,6 +472,16 @@ public final class SystemSessionProperties
                         COLOCATED_JOIN,
                         "Use a colocated join when possible",
                         optimizerConfig.isColocatedJoinsEnabled(),
+                        false),
+                stringProperty(
+                        JOIN_FIXED_ORDER,
+                        "join fixed order",
+                        optimizerConfig.getJoinFixedOrder(),
+                        false),
+                booleanProperty(
+                        FIX_JOIN_ORDER,
+                        "fix join order",
+                        optimizerConfig.isFixJoinOrderEnabled(),
                         false),
                 booleanProperty(
                         SPATIAL_JOIN,
@@ -1264,6 +1276,16 @@ public final class SystemSessionProperties
     public static boolean isColocatedJoinEnabled(Session session)
     {
         return session.getSystemProperty(COLOCATED_JOIN, Boolean.class);
+    }
+
+    public static Optional<String> getJoinFixedOrder(Session session)
+    {
+        return Optional.ofNullable(session.getSystemProperty(JOIN_FIXED_ORDER, String.class));
+    }
+
+    public static boolean isFixJoinOrderEnabled(Session session)
+    {
+        return session.getSystemProperty(FIX_JOIN_ORDER, Boolean.class);
     }
 
     public static boolean isSpatialJoinEnabled(Session session)

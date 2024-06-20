@@ -20,23 +20,31 @@ import io.trino.sql.planner.plan.PlanNodeId;
 import io.trino.sql.planner.plan.PlanVisitor;
 
 import java.util.List;
+import java.util.Optional;
 
 public class GroupReference
         extends PlanNode
 {
     private final int groupId;
     private final List<Symbol> outputs;
+    private final Optional<String> tableName;
 
-    public GroupReference(PlanNodeId id, int groupId, List<Symbol> outputs)
+    public GroupReference(PlanNodeId id, int groupId, List<Symbol> outputs, Optional<String> tableName)
     {
         super(id);
         this.groupId = groupId;
         this.outputs = ImmutableList.copyOf(outputs);
+        this.tableName = tableName;
     }
 
     public int getGroupId()
     {
         return groupId;
+    }
+
+    public Optional<String> getTableName()
+    {
+        return tableName;
     }
 
     @Override

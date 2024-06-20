@@ -818,7 +818,8 @@ public class PlanTester
                 new CostComparator(optimizerConfig),
                 taskCountEstimator,
                 nodePartitioningManager,
-                new RuleStatsRecorder()).get();
+                new RuleStatsRecorder(),
+                null).get();
     }
 
     public Plan createPlan(Session session, @Language("SQL") String sql, List<PlanOptimizer> optimizers, LogicalPlanner.Stage stage, WarningCollector warningCollector, PlanOptimizersStatsCollector planOptimizersStatsCollector)

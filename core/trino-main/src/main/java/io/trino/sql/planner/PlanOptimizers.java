@@ -26,6 +26,7 @@ import io.trino.cost.StatsCalculator;
 import io.trino.cost.TaskCountEstimator;
 import io.trino.execution.TaskManagerConfig;
 import io.trino.metadata.Metadata;
+import io.trino.metadata.MetadataManager;
 import io.trino.split.PageSourceManager;
 import io.trino.split.SplitManager;
 import io.trino.sql.PlannerContext;
@@ -268,6 +269,7 @@ public class PlanOptimizers
     private final List<PlanOptimizer> optimizers;
     private final RuleStatsRecorder ruleStats;
     private final OptimizerStatsRecorder optimizerStats = new OptimizerStatsRecorder();
+    private final MetadataManager metadataManager;
 
     @Inject
     public PlanOptimizers(
@@ -283,7 +285,8 @@ public class PlanOptimizers
             CostComparator costComparator,
             TaskCountEstimator taskCountEstimator,
             NodePartitioningManager nodePartitioningManager,
-            RuleStatsRecorder ruleStats)
+            RuleStatsRecorder ruleStats,
+            MetadataManager metadataManager)
     {
         this(plannerContext,
                 typeAnalyzer,
@@ -298,7 +301,8 @@ public class PlanOptimizers
                 costComparator,
                 taskCountEstimator,
                 nodePartitioningManager,
-                ruleStats);
+                ruleStats,
+                metadataManager);
     }
 
     public PlanOptimizers(
@@ -315,11 +319,13 @@ public class PlanOptimizers
             CostComparator costComparator,
             TaskCountEstimator taskCountEstimator,
             NodePartitioningManager nodePartitioningManager,
-            RuleStatsRecorder ruleStats)
+            RuleStatsRecorder ruleStats,
+            MetadataManager metadataManager)
     {
         CostCalculator costCalculator = costCalculatorWithEstimatedExchanges;
 
         this.ruleStats = requireNonNull(ruleStats, "ruleStats is null");
+        this.metadataManager = requireNonNull(metadataManager, "metadataManager is null");
         ImmutableList.Builder<PlanOptimizer> builder = ImmutableList.builder();
 
         Metadata metadata = plannerContext.getMetadata();
@@ -387,6 +393,13 @@ public class PlanOptimizers
                 statsCalculator,
                 costCalculator,
                 columnPruningRules);
+        IterativeOptimizer reorderJoinOptimizer = new IterativeOptimizer(
+                plannerContext,
+                ruleStats,
+                statsCalculator,
+                costCalculator,
+                ImmutableSet.of(new ReorderJoins(plannerContext, costComparator, typeAnalyzer))).setMetadataManager(this.metadataManager);
+        reorderJoinOptimizer.setMetadataManager(this.metadataManager);
 
         builder.add(
                 // Clean up all the sugar in expressions, e.g. AtTimeZone, must be run before all the other optimizers
@@ -782,12 +795,7 @@ public class PlanOptimizers
                 // PredicatePushDown, columnPruningOptimizer and RemoveRedundantIdentityProjections
                 // need to run beforehand in order to produce an optimal join order
                 // It also needs to run after EliminateCrossJoins so that its chosen order doesn't get undone.
-                new IterativeOptimizer(
-                        plannerContext,
-                        ruleStats,
-                        statsCalculator,
-                        costCalculator,
-                        ImmutableSet.of(new ReorderJoins(plannerContext, costComparator, typeAnalyzer))));
+                reorderJoinOptimizer);
 
         builder.add(new OptimizeMixedDistinctAggregations(metadata));
         builder.add(new IterativeOptimizer(

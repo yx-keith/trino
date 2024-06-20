@@ -56,7 +56,8 @@ public class OptimizerConfig
     private boolean colocatedJoinsEnabled = true;
     private boolean spatialJoinsEnabled = true;
     private boolean distributedSort = true;
-
+    private String joinFixedOrder;
+    private boolean fixJoinOrderEnabled;
     private boolean usePreferredWritePartitioning = true;
 
     private Duration iterativeOptimizerTimeout = new Duration(3, MINUTES); // by default let optimizer wait a long time in case it retrieves some data from ConnectorMetadata
@@ -370,6 +371,30 @@ public class OptimizerConfig
     public OptimizerConfig setDistributedSortEnabled(boolean enabled)
     {
         distributedSort = enabled;
+        return this;
+    }
+
+    public String getJoinFixedOrder()
+    {
+        return joinFixedOrder;
+    }
+
+    @Config("join-fixed-order")
+    public OptimizerConfig setJoinFixedOrder(String joinFixedOrder)
+    {
+        this.joinFixedOrder = joinFixedOrder;
+        return this;
+    }
+
+    public boolean isFixJoinOrderEnabled()
+    {
+        return fixJoinOrderEnabled;
+    }
+
+    @Config("fix-join-order")
+    public OptimizerConfig setFixJoinOrderEnabled(boolean fixJoinOrderEnabled)
+    {
+        this.fixJoinOrderEnabled = fixJoinOrderEnabled;
         return this;
     }
 

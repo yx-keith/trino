@@ -15,22 +15,22 @@ package io.trino.sql.planner.iterative;
 
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
+import io.trino.Session;
 import io.trino.cost.PlanCostEstimate;
 import io.trino.cost.PlanNodeStatsEstimate;
+import io.trino.metadata.MetadataManager;
+import io.trino.spi.connector.CatalogSchemaTableName;
 import io.trino.sql.planner.PlanNodeIdAllocator;
-import io.trino.sql.planner.plan.PlanNode;
+import io.trino.sql.planner.plan.*;
 import jakarta.annotation.Nullable;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
+import static io.trino.SystemSessionProperties.isFixJoinOrderEnabled;
 import static io.trino.sql.planner.iterative.Plans.resolveGroupReferences;
 import static java.util.Objects.requireNonNull;
 
@@ -70,10 +70,21 @@ public class Memo
     private final Map<Integer, Group> groups = new HashMap<>();
 
     private int nextGroupId = ROOT_GROUP_REF + 1;
+    private Session session;
+    private Optional<MetadataManager> metadataManager;
 
     public Memo(PlanNodeIdAllocator idAllocator, PlanNode plan)
     {
         this.idAllocator = idAllocator;
+        rootGroup = insertRecursive(plan);
+        groups.get(rootGroup).incomingReferences.add(ROOT_GROUP_REF);
+    }
+
+    public Memo(PlanNodeIdAllocator idAllocator, PlanNode plan, Session session, MetadataManager metadataManager)
+    {
+        this.session = session;
+        this.idAllocator = idAllocator;
+        this.metadataManager = Optional.ofNullable(metadataManager);
         rootGroup = insertRecursive(plan);
         groups.get(rootGroup).incomingReferences.add(ROOT_GROUP_REF);
     }
@@ -212,11 +223,44 @@ public class Memo
     {
         return node.replaceChildren(
                 node.getSources().stream()
-                        .map(child -> new GroupReference(
-                                idAllocator.getNextId(),
-                                insertRecursive(child),
-                                child.getOutputSymbols()))
+                        .map(child -> {
+                            Optional<String> tableName = Optional.empty();
+                            if (metadataManager.isPresent() && isFixJoinOrderEnabled(session)) {
+                                Optional<TableScanNode> result = getTableScanNode(child);
+                                if (result.isPresent()) {
+                                    CatalogSchemaTableName catalogSchemaTableName = metadataManager.get().getTableName(session, result.get().getTable());
+                                    tableName = Optional.of(catalogSchemaTableName.getSchemaTableName().getTableName());
+                                }
+                            }
+                            return new GroupReference(
+                                    idAllocator.getNextId(),
+                                    insertRecursive(child),
+                                    child.getOutputSymbols(),
+                                    tableName);
+                        })
                         .collect(Collectors.toList()));
+    }
+
+    private Optional<TableScanNode> getTableScanNode(PlanNode node)
+    {
+        if (node instanceof GroupReference) {
+            return Optional.empty();
+        }
+        List<PlanNode> children = node.getSources();
+        for (PlanNode child : children) {
+            if (child instanceof JoinNode) {
+                return Optional.empty();
+            }
+            Optional<TableScanNode> result = getTableScanNode(child);
+            if (result.isPresent()) {
+                return result;
+            }
+        }
+
+        if (node instanceof TableScanNode tableScanNode) {
+            return Optional.of(tableScanNode);
+        }
+        return Optional.empty();
     }
 
     private int insertRecursive(PlanNode node)

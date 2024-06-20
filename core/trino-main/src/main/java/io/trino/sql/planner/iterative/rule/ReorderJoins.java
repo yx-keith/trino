@@ -40,6 +40,7 @@ import io.trino.sql.planner.PlanNodeIdAllocator;
 import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.SymbolsExtractor;
 import io.trino.sql.planner.TypeProvider;
+import io.trino.sql.planner.iterative.GroupReference;
 import io.trino.sql.planner.iterative.Lookup;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.plan.FilterNode;
@@ -52,14 +53,7 @@ import io.trino.sql.tree.ComparisonExpression;
 import io.trino.sql.tree.Expression;
 import io.trino.sql.tree.SymbolReference;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
 
@@ -70,9 +64,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.collect.Sets.powerSet;
-import static io.trino.SystemSessionProperties.getJoinDistributionType;
-import static io.trino.SystemSessionProperties.getJoinReorderingStrategy;
-import static io.trino.SystemSessionProperties.getMaxReorderedJoins;
+import static io.trino.SystemSessionProperties.*;
 import static io.trino.sql.ir.IrUtils.and;
 import static io.trino.sql.ir.IrUtils.combineConjuncts;
 import static io.trino.sql.ir.IrUtils.extractConjuncts;
@@ -81,8 +73,7 @@ import static io.trino.sql.planner.EqualityInference.nonInferrableConjuncts;
 import static io.trino.sql.planner.OptimizerConfig.JoinReorderingStrategy.AUTOMATIC;
 import static io.trino.sql.planner.iterative.rule.DetermineJoinDistributionType.canReplicate;
 import static io.trino.sql.planner.iterative.rule.PushProjectionThroughJoin.pushProjectionThroughJoin;
-import static io.trino.sql.planner.iterative.rule.ReorderJoins.JoinEnumerationResult.INFINITE_COST_RESULT;
-import static io.trino.sql.planner.iterative.rule.ReorderJoins.JoinEnumerationResult.UNKNOWN_COST_RESULT;
+import static io.trino.sql.planner.iterative.rule.ReorderJoins.JoinEnumerationResult.*;
 import static io.trino.sql.planner.iterative.rule.ReorderJoins.MultiJoinNode.toMultiJoinNode;
 import static io.trino.sql.planner.optimizations.QueryCardinalityUtil.isAtMostScalar;
 import static io.trino.sql.planner.plan.JoinNode.DistributionType.PARTITIONED;
@@ -133,9 +124,19 @@ public class ReorderJoins
     @Override
     public Result apply(JoinNode joinNode, Captures captures, Context context)
     {
+        List<List<TableWithIndex>> fixedOrderList = new ArrayList<>();
+        if (isFixJoinOrderEnabled(context.getSession())) {
+            Optional<String> optionalOrders = getJoinFixedOrder(context.getSession());
+            if (optionalOrders.isPresent()) {
+                String orders = optionalOrders.get();
+//            String orders = "inventory,date_dim:2,warehouse;catalog_sales,item,customer_demographics,household_demographics,date_dim:1,date_dim:3";
+                fixedOrderList = getFixedOrderList(orders);
+            }
+        }
+
         // try reorder joins with projection pushdown first
         MultiJoinNode multiJoinNode = toMultiJoinNode(plannerContext, joinNode, context, true, typeAnalyzer);
-        JoinEnumerationResult resultWithProjectionPushdown = chooseJoinOrder(multiJoinNode, context);
+        JoinEnumerationResult resultWithProjectionPushdown = chooseJoinOrder(multiJoinNode, context, fixedOrderList);
         if (resultWithProjectionPushdown.getPlanNode().isEmpty()) {
             return Result.empty();
         }
@@ -146,7 +147,7 @@ public class ReorderJoins
 
         // try reorder joins without projection pushdown
         multiJoinNode = toMultiJoinNode(plannerContext, joinNode, context, false, typeAnalyzer);
-        JoinEnumerationResult resultWithoutProjectionPushdown = chooseJoinOrder(multiJoinNode, context);
+        JoinEnumerationResult resultWithoutProjectionPushdown = chooseJoinOrder(multiJoinNode, context, fixedOrderList);
         if (resultWithoutProjectionPushdown.getPlanNode().isEmpty()
                 || costComparator.compare(context.getSession(), resultWithProjectionPushdown.cost, resultWithoutProjectionPushdown.cost) < 0) {
             return Result.ofPlanNode(resultWithProjectionPushdown.getPlanNode().get());
@@ -155,14 +156,14 @@ public class ReorderJoins
         return Result.ofPlanNode(resultWithoutProjectionPushdown.getPlanNode().get());
     }
 
-    private JoinEnumerationResult chooseJoinOrder(MultiJoinNode multiJoinNode, Context context)
+    private JoinEnumerationResult chooseJoinOrder(MultiJoinNode multiJoinNode, Context context, List<List<TableWithIndex>> fixedOrderList)
     {
         JoinEnumerator joinEnumerator = new JoinEnumerator(
                 plannerContext.getMetadata(),
                 costComparator,
                 multiJoinNode.getFilter(),
                 context);
-        return joinEnumerator.chooseJoinOrder(multiJoinNode.getSources(), multiJoinNode.getOutputSymbols());
+        return joinEnumerator.chooseJoinOrder(multiJoinNode.getSources(), multiJoinNode.getOutputSymbols(), fixedOrderList);
     }
 
     @VisibleForTesting
@@ -197,7 +198,7 @@ public class ReorderJoins
             this.lookup = requireNonNull(context.getLookup(), "lookup is null");
         }
 
-        private JoinEnumerationResult chooseJoinOrder(LinkedHashSet<PlanNode> sources, List<Symbol> outputSymbols)
+        private JoinEnumerationResult chooseJoinOrder(LinkedHashSet<PlanNode> sources, List<Symbol> outputSymbols, List<List<TableWithIndex>> fixedOrdersList)
         {
             context.checkTimeoutNotExhausted();
 
@@ -206,30 +207,137 @@ public class ReorderJoins
             if (bestResult == null) {
                 checkState(sources.size() > 1, "sources size is less than or equal to one");
                 ImmutableList.Builder<JoinEnumerationResult> resultBuilder = ImmutableList.builder();
-                Set<Set<Integer>> partitions = generatePartitions(sources.size());
-                for (Set<Integer> partition : partitions) {
-                    JoinEnumerationResult result = createJoinAccordingToPartitioning(sources, outputSymbols, partition);
-                    if (result.equals(UNKNOWN_COST_RESULT)) {
-                        memo.put(multiJoinKey, result);
-                        return result;
+                if (isFixJoinOrderEnabled(session) && getJoinFixedOrder(session).isPresent()) {
+                    int initJoinsSize = 0;
+                    for (List<TableWithIndex> subList : fixedOrdersList) {
+                        initJoinsSize += subList.size();
                     }
-                    if (!result.equals(INFINITE_COST_RESULT)) {
-                        resultBuilder.add(result);
+                    Set<Integer> leftPartition = new LinkedHashSet<>();
+                    Set<Integer> rightPartition = new LinkedHashSet<>();
+                    if (!fixedOrdersList.isEmpty() && initJoinsSize == sources.size() && sources.size() > 3) {
+                        initFixedOrderJoins(sources, fixedOrdersList, leftPartition, rightPartition);
+                    } else {
+                        int size = sources.size();
+                        if (size > 1) {
+                            leftPartition.add(0);
+                            for (int i = 1; i < size; i++) {
+                                rightPartition.add(i);
+                            }
+                        }
                     }
-                }
 
-                List<JoinEnumerationResult> results = resultBuilder.build();
-                if (results.isEmpty()) {
-                    memo.put(multiJoinKey, INFINITE_COST_RESULT);
-                    return INFINITE_COST_RESULT;
-                }
+//                    if(sources.size() == 9) {
+//                        leftPartition.add(8);
+//                        leftPartition.add(6);
+//                        leftPartition.add(5);
+//                        leftPartition.add(4);
+//                        leftPartition.add(3);
+//                        leftPartition.add(0);
+//
+//                        rightPartition.add(2);
+//                        rightPartition.add(7);
+//                        rightPartition.add(1);
+//                    } else {
+//                        int size = sources.size();
+//                        if(size > 1) {
+//                            leftPartition.add(0);
+//                            for (int i = 1; i < size; i++) {
+//                                rightPartition.add(i);
+//                            }
+//                        }
+//                    }
+                    JoinEnumerationResult result = createJoinAccordingToPartitioning(sources, outputSymbols, leftPartition, rightPartition);
+                    if(result.getPlanNode().isPresent()) {
+                        log.info("node output: "+ result.getPlanNode().get().getOutputSymbols());
+                    }
+                    memo.put(multiJoinKey, result);
+                    return result;
+                } else {
+                    Set<Set<Integer>> partitions = generatePartitions(sources.size());
+                    for (Set<Integer> partition : partitions) {
+                        JoinEnumerationResult result = createJoinAccordingToPartitioning(sources, outputSymbols, partition);
+                        if (result.equals(UNKNOWN_COST_RESULT)) {
+                            memo.put(multiJoinKey, result);
+                            return result;
+                        }
+                        if (!result.equals(INFINITE_COST_RESULT)) {
+                            resultBuilder.add(result);
+                        }
+                    }
+                    List<JoinEnumerationResult> results = resultBuilder.build();
+                    if (results.isEmpty()) {
+                        memo.put(multiJoinKey, INFINITE_COST_RESULT);
+                        return INFINITE_COST_RESULT;
+                    }
 
-                bestResult = resultComparator.min(results);
-                memo.put(multiJoinKey, bestResult);
+                    bestResult = resultComparator.min(results);
+                    memo.put(multiJoinKey, bestResult);
+                }
             }
 
             bestResult.planNode.ifPresent(planNode -> log.debug("Least cost join was: %s", planNode));
             return bestResult;
+        }
+
+        private void initFixedOrderJoins(LinkedHashSet<PlanNode> sources, List<List<TableWithIndex>> fixedOrdersList, Set<Integer> leftPartition, Set<Integer> rightPartition)
+        {
+            /**
+             * sourceMap:
+             * [tableName0,[GroupReference0,GroupReference1,GroupReference2]]
+             * [tableName1,[GroupReference3]]
+             *
+             * indexMap:
+             * [GroupReference0,8]
+             * [GroupReference0,9]
+             */
+            List<PlanNode> sourceList = sources.stream().toList();
+            Map<String, List<PlanNode>> sourceMap = new HashMap<>();
+            Map<PlanNode, Integer> indexMap = new HashMap<>();
+            for (int i = 0; i < sources.size(); i++) {
+                PlanNode planNode = sourceList.get(i);
+                if (planNode instanceof GroupReference node && node.getTableName().isPresent()) {
+                    indexMap.put(node, i);
+                    String tableName = node.getTableName().get();
+                    if (sourceMap.containsKey(tableName)) {
+                        sourceMap.get(tableName).add(node);
+                    } else {
+                        List<PlanNode> subList = new LinkedList<>();
+                        subList.add(node);
+                        sourceMap.put(tableName, subList);
+                    }
+                }
+            }
+
+            if (fixedOrdersList.size() > 2) {
+                return;
+            }
+
+            List<TableWithIndex> list1 = new LinkedList<>();
+            List<TableWithIndex> list2 = new LinkedList<>();
+            if (fixedOrdersList.size() == 2) {
+                list1.addAll(fixedOrdersList.get(0));
+                list2.addAll(fixedOrdersList.get(1));
+            } else if (fixedOrdersList.size() == 1) {
+                List<TableWithIndex> list = fixedOrdersList.get(0);
+                list1.add(list.remove(list.size() - 1));
+                list2.addAll(list);
+            }
+
+            for (int i = list1.size() - 1; i >= 0; i--) {
+                TableWithIndex table = list1.get(i);
+                log.info(table.toString());
+                int index = table.getIndex();
+                PlanNode planNode = sourceMap.get(table.getTableName()).get(index);
+                leftPartition.add(indexMap.get(planNode));
+            }
+
+            for (int i = list2.size() - 1; i >= 0; i--) {
+                TableWithIndex table = list2.get(i);
+                int index = table.getIndex();
+                log.info(table.toString());
+                PlanNode planNode = sourceMap.get(table.getTableName()).get(index);
+                rightPartition.add(indexMap.get(planNode));
+            }
         }
 
         /**
@@ -263,6 +371,19 @@ public class ReorderJoins
                     .collect(toCollection(LinkedHashSet::new));
             LinkedHashSet<PlanNode> rightSources = sources.stream()
                     .filter(source -> !leftSources.contains(source))
+                    .collect(toCollection(LinkedHashSet::new));
+            return createJoin(leftSources, rightSources, outputSymbols);
+        }
+
+        @VisibleForTesting
+        JoinEnumerationResult createJoinAccordingToPartitioning(LinkedHashSet<PlanNode> sources, List<Symbol> outputSymbols, Set<Integer> leftPartitioning, Set<Integer> rightPartitioning)
+        {
+            List<PlanNode> sourceList = ImmutableList.copyOf(sources);
+            LinkedHashSet<PlanNode> leftSources = leftPartitioning.stream()
+                    .map(sourceList::get)
+                    .collect(toCollection(LinkedHashSet::new));
+            LinkedHashSet<PlanNode> rightSources = rightPartitioning.stream()
+                    .map(sourceList::get)
                     .collect(toCollection(LinkedHashSet::new));
             return createJoin(leftSources, rightSources, outputSymbols);
         }
@@ -387,7 +508,7 @@ public class ReorderJoins
                 }
                 return createJoinEnumerationResult(planNode);
             }
-            return chooseJoinOrder(nodes, outputSymbols);
+            return chooseJoinOrder(nodes, outputSymbols, new ArrayList<>());
         }
 
         private static boolean isJoinEqualityCondition(Expression expression)
@@ -416,8 +537,13 @@ public class ReorderJoins
             }
             List<JoinEnumerationResult> possibleJoinNodes = getPossibleJoinNodes(joinNode, getJoinDistributionType(session));
             verify(!possibleJoinNodes.isEmpty(), "possibleJoinNodes is empty");
-            if (possibleJoinNodes.stream().anyMatch(UNKNOWN_COST_RESULT::equals)) {
-                return UNKNOWN_COST_RESULT;
+            if(getJoinFixedOrder(session).isEmpty()) {
+                if (possibleJoinNodes.stream().anyMatch(UNKNOWN_COST_RESULT::equals)) {
+                    return UNKNOWN_COST_RESULT;
+                }
+            } else {
+                possibleJoinNodes = getPossibleFixedJoinNodes(joinNode, getJoinDistributionType(session));
+                return possibleJoinNodes.get(0);
             }
             return resultComparator.min(possibleJoinNodes);
         }
@@ -440,6 +566,25 @@ public class ReorderJoins
             };
         }
 
+        private List<JoinEnumerationResult> getPossibleFixedJoinNodes(JoinNode joinNode, JoinDistributionType distributionType)
+        {
+            checkArgument(joinNode.getType() == INNER, "unexpected join node type: %s", joinNode.getType());
+
+            if (joinNode.isCrossJoin()) {
+                return getPossibleJoinNodes(joinNode, REPLICATED);
+            }
+
+            return switch (distributionType) {
+                case PARTITIONED -> getPossibleJoinNodes(joinNode, PARTITIONED);
+                case BROADCAST -> getPossibleJoinNodes(joinNode, REPLICATED);
+                case AUTOMATIC -> ImmutableList.<JoinEnumerationResult>builder()
+                        .addAll(getPossibleJoinNodes(joinNode, REPLICATED, node -> canReplicate(node, context)))
+                        .addAll(getPossibleJoinNodes(joinNode, PARTITIONED))
+                        .build();
+            };
+        }
+
+
         private List<JoinEnumerationResult> getPossibleJoinNodes(JoinNode joinNode, DistributionType distributionType)
         {
             return getPossibleJoinNodes(joinNode, distributionType, node -> true);
@@ -457,6 +602,9 @@ public class ReorderJoins
         {
             PlanCostEstimate costEstimate = costProvider.getCost(joinNode);
             PlanNodeStatsEstimate statsEstimate = statsProvider.getStats(joinNode);
+            if (isFixJoinOrderEnabled(session) && getJoinFixedOrder(session).isPresent()) {
+                return createJoinEnumerationResultNew(Optional.of(joinNode));
+            }
             return JoinEnumerationResult.createJoinEnumerationResult(
                     Optional.of(joinNode.withReorderJoinStatsAndCost(new PlanNodeStatsAndCostSummary(
                             statsEstimate.getOutputRowCount(),
@@ -469,6 +617,9 @@ public class ReorderJoins
 
         private JoinEnumerationResult createJoinEnumerationResult(PlanNode planNode)
         {
+            if(isFixJoinOrderEnabled(session) && getJoinFixedOrder(session).isPresent()) {
+                return JoinEnumerationResult.createJoinEnumerationResultNew(Optional.of(planNode));
+            }
             return JoinEnumerationResult.createJoinEnumerationResult(Optional.of(planNode), costProvider.getCost(planNode));
         }
     }
@@ -734,5 +885,64 @@ public class ReorderJoins
             }
             return new JoinEnumerationResult(planNode, cost);
         }
+
+        static JoinEnumerationResult createJoinEnumerationResultNew(Optional<PlanNode> planNode)
+        {
+            log.info("构建新Join节点...");
+            return new JoinEnumerationResult(planNode, PlanCostEstimate.zero());
+        }
+    }
+
+    static class TableWithIndex
+    {
+        final String tableName;
+        final int index;
+
+        public TableWithIndex(String tableName, int index) {
+            this.tableName = tableName;
+            this.index = index;
+        }
+
+        public String getTableName() {
+            return tableName;
+        }
+
+        public int getIndex() {
+            return index;
+        }
+
+        @Override
+        public String toString() {
+            return "TableWithIndex{" +
+                    "tableName='" + tableName + '\'' +
+                    ", index=" + index +
+                    '}';
+        }
+    }
+
+    /**
+     * orders1: inventory,date_dim:2,warehouse;catalog_sales,item,customer_demographics,household_demographics,date_dim:1,date_dim:3
+     * orders2: store_sales,date_dim:1,date_dim:2,customer,customer_address,item
+     */
+    private List<List<TableWithIndex>> getFixedOrderList(String orders)
+    {
+        List<List<TableWithIndex>> outerList = new LinkedList<>();
+        String[] arr = orders.split(";");
+        for (String outer : arr) {
+            List<TableWithIndex> list = new LinkedList<>();
+            String[] innerArr = outer.split(",");
+            for (String inner : innerArr) {
+                String tableName = inner;
+                if (inner.contains(":")) {
+                    tableName = inner.split(":")[0];
+                    int index = Integer.parseInt(inner.split(":")[1]);
+                    list.add(new TableWithIndex(tableName, index - 1));
+                } else {
+                    list.add(new TableWithIndex(tableName, 0));
+                }
+            }
+            outerList.add(list);
+        }
+        return outerList;
     }
 }
