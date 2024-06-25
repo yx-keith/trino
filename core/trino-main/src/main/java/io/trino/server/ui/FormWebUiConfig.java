@@ -58,7 +58,7 @@ public class FormWebUiConfig
         return webLoginPassswordFile;
     }
 
-    @Config("web-ui.login-passwordFile")
+    @Config("web-ui.login-password-file")
     public FormWebUiConfig setWebLoginPassswordFile(File webLoginPassswordFile) {
         this.webLoginPassswordFile = webLoginPassswordFile;
         return this;
