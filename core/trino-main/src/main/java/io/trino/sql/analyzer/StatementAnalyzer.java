@@ -30,6 +30,7 @@ import io.airlift.slice.Slice;
 import io.trino.Session;
 import io.trino.SystemSessionProperties;
 import io.trino.connector.system.GlobalSystemConnector;
+import io.trino.event.QueryMonitor;
 import io.trino.execution.Column;
 import io.trino.execution.warnings.WarningCollector;
 import io.trino.metadata.AnalyzePropertyManager;
@@ -60,18 +61,7 @@ import io.trino.security.SecurityContext;
 import io.trino.security.ViewAccessControl;
 import io.trino.spi.TrinoException;
 import io.trino.spi.TrinoWarning;
-import io.trino.spi.connector.CatalogHandle;
-import io.trino.spi.connector.CatalogSchemaName;
-import io.trino.spi.connector.CatalogSchemaTableName;
-import io.trino.spi.connector.ColumnHandle;
-import io.trino.spi.connector.ColumnMetadata;
-import io.trino.spi.connector.ColumnSchema;
-import io.trino.spi.connector.ConnectorTableMetadata;
-import io.trino.spi.connector.ConnectorTransactionHandle;
-import io.trino.spi.connector.MaterializedViewFreshness;
-import io.trino.spi.connector.PointerType;
-import io.trino.spi.connector.SchemaTableName;
-import io.trino.spi.connector.TableProcedureMetadata;
+import io.trino.spi.connector.*;
 import io.trino.spi.function.CatalogSchemaFunctionName;
 import io.trino.spi.function.FunctionKind;
 import io.trino.spi.function.OperatorType;
@@ -303,8 +293,7 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Iterables.getLast;
 import static com.google.common.collect.Iterables.getOnlyElement;
-import static io.trino.SystemSessionProperties.getMaxGroupingSets;
-import static io.trino.SystemSessionProperties.isLegacyMaterializedViewGracePeriod;
+import static io.trino.SystemSessionProperties.*;
 import static io.trino.metadata.FunctionResolver.toPath;
 import static io.trino.metadata.GlobalFunctionCatalog.isBuiltinFunctionName;
 import static io.trino.metadata.MetadataUtil.createQualifiedObjectName;
@@ -382,6 +371,7 @@ import static io.trino.spi.type.VarcharType.VARCHAR;
 import static io.trino.spi.type.VarcharType.createUnboundedVarcharType;
 import static io.trino.sql.NodeUtils.getSortItemsFromOrderBy;
 import static io.trino.sql.SqlFormatter.formatSql;
+import static io.trino.sql.SqlFormatterUtil.getFormattedSql;
 import static io.trino.sql.analyzer.AggregationAnalyzer.verifyOrderByAggregations;
 import static io.trino.sql.analyzer.AggregationAnalyzer.verifySourceAggregations;
 import static io.trino.sql.analyzer.Analyzer.verifyNoAggregateWindowOrGroupingFunctions;
@@ -2235,12 +2225,72 @@ class StatementAnalyzer
         @Override
         protected Scope visitTable(Table table, Optional<Scope> scope)
         {
+            QualifiedObjectName name = createQualifiedObjectName(session, table, table.getName());
+            boolean isCteToMVEnabled = isCteToMaterializedViewEnabled(session);
+            //如果普通表不是三段式写法改成三段式写法，如果是物化视图表则跳过
+            if (isCteToMVEnabled) {
+                Map<QualifiedObjectName, MaterializedViewDefinition> cteMaterializedViewDefinitionMap = QueryMonitor.getCteMaterializedViewDefinitionMap();
+                Optional<WithQuery> withQuery = createScope(scope).getNamedQuery(table.getName().getSuffix());
+                List<Identifier> originalParts = table.getName().getOriginalParts().reversed();
+                if (withQuery.isEmpty() && !cteMaterializedViewDefinitionMap.containsKey(name)) {
+                    if (originalParts.size() <= 2) {
+                        String catalog = session.getCatalog().get();
+                        Optional<String> mvBaseCatalog = getMVBaseCatalog(session);
+                        Optional<String> mvBaseSchema = getMVBaseSchema(session);
+                        if (catalog.equalsIgnoreCase("iceberg")) {
+                            catalog = mvBaseCatalog.orElse("hive");
+                        }
+                        if (originalParts.size() == 1) {
+                            String schema = mvBaseSchema.orElseGet(() -> session.getSchema().get());
+                            originalParts.add(new Identifier(schema));
+                        }
+                        originalParts.add(new Identifier(catalog));
+                        table.setName(QualifiedName.of(originalParts.reversed()));
+                    }
+                }
+            }
+
             if (table.getName().getPrefix().isEmpty()) {
                 // is this a reference to a WITH query?
                 Optional<WithQuery> withQuery = createScope(scope).getNamedQuery(table.getName().getSuffix());
                 if (withQuery.isPresent()) {
-                    analysis.setRelationName(table, table.getName());
-                    return createScopeForCommonTableExpression(table, scope, withQuery.get());
+                    if (isCteToMVEnabled) {
+                        Map<QualifiedObjectName, MaterializedViewDefinition> cteMaterializedViewDefinitionMap = QueryMonitor.getCteMaterializedViewDefinitionMap();
+                        Map<QualifiedObjectName, Boolean> cteMaterializedViewRefreshedMap = QueryMonitor.getCteMaterializedViewRefreshedMap();
+
+                        if (!cteMaterializedViewDefinitionMap.containsKey(name)) {
+                            //构建materialized view definition对象
+                            Optional<String> catalog = session.getCatalog();
+                            Optional<String> schema = session.getSchema();
+                            String sql = getFormattedSql(withQuery.get().getQuery(), sqlParser);
+                            List<ViewColumn> columns = analysis.getOutputDescriptor(withQuery.get().getQuery())
+                                    .getVisibleFields().stream()
+                                    .map(field -> new ViewColumn(field.getName().get(), field.getType().getTypeId(), Optional.empty()))
+                                    .collect(toImmutableList());
+                            List<CatalogSchemaName> path = session.getPath().getPath().stream()
+                                    // system path elements are not stored
+                                    .filter(element -> !element.getCatalogName().equals(GlobalSystemConnector.NAME))
+                                    .collect(toImmutableList());
+                            Identity owner = session.getIdentity();
+                            MaterializedViewDefinition definition = new MaterializedViewDefinition(sql, catalog, schema, columns, Optional.empty(), Optional.empty(), owner, path, Optional.empty());
+                            QueryMonitor.cacheCteMaterializedViewDefinitionMap(name, definition);
+                            QueryMonitor.updateCteMaterializedViewRefreshedMap(name, false);
+
+                            analysis.setRelationName(table, table.getName());
+                            return createScopeForCommonTableExpression(table, scope, withQuery.get());
+                        }
+
+                        if (cteMaterializedViewRefreshedMap.containsKey(name)) {
+                            boolean isMaterializedViewRefreshed = cteMaterializedViewRefreshedMap.get(name);
+                            if (!isMaterializedViewRefreshed) {
+                                analysis.setRelationName(table, table.getName());
+                                return createScopeForCommonTableExpression(table, scope, withQuery.get());
+                            }
+                        }
+                    } else {
+                        analysis.setRelationName(table, table.getName());
+                        return createScopeForCommonTableExpression(table, scope, withQuery.get());
+                    }
                 }
                 // is this a recursive reference in expandable WITH query? If so, there's base scope recorded.
                 Optional<Scope> expandableBaseScope = analysis.getExpandableBaseScope(table);
@@ -2256,7 +2306,6 @@ class StatementAnalyzer
                 }
             }
 
-            QualifiedObjectName name = createQualifiedObjectName(session, table, table.getName());
             analysis.setRelationName(table, QualifiedName.of(name.getCatalogName(), name.getSchemaName(), name.getObjectName()));
 
             Optional<MaterializedViewDefinition> optionalMaterializedView = metadata.getMaterializedView(session, name);

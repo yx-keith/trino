@@ -138,7 +138,8 @@ public class TestLocalDispatchQuery
                                 () -> { throw new UnsupportedOperationException(); },
                                 () -> { throw new UnsupportedOperationException(); }),
                         LanguageFunctionProvider.DISABLED),
-                new QueryMonitorConfig());
+                new QueryMonitorConfig(),
+                null);
         CreateTable createTable = new CreateTable(QualifiedName.of("table"), ImmutableList.of(), FAIL, ImmutableList.of(), Optional.empty());
         QueryPreparer.PreparedQuery preparedQuery = new QueryPreparer.PreparedQuery(createTable, ImmutableList.of(), Optional.empty());
         DataDefinitionExecution.DataDefinitionExecutionFactory dataDefinitionExecutionFactory = new DataDefinitionExecution.DataDefinitionExecutionFactory(

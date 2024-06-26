@@ -56,6 +56,13 @@ public class QualifiedName
         return new QualifiedName(ImmutableList.copyOf(originalParts));
     }
 
+    public static QualifiedName of(List<Identifier> originalParts)
+    {
+        requireNonNull(originalParts, "originalParts is null");
+        checkArgument(!isEmpty(originalParts), "originalParts is empty");
+        return new QualifiedName(originalParts);
+    }
+
     private QualifiedName(List<Identifier> originalParts)
     {
         this.originalParts = originalParts;

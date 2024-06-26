@@ -295,7 +295,8 @@ public class InMemoryTransactionManager
 
     private ListenableFuture<TransactionMetadata> removeTransactionMetadataAsFuture(TransactionId transactionId)
     {
-        TransactionMetadata transactionMetadata = transactions.remove(transactionId);
+//        TransactionMetadata transactionMetadata = transactions.remove(transactionId);
+        TransactionMetadata transactionMetadata = transactions.get(transactionId);
         if (transactionMetadata == null) {
             return immediateFailedFuture(new NotInTransactionException(transactionId));
         }
@@ -449,7 +450,7 @@ public class InMemoryTransactionManager
 
         private synchronized CatalogMetadata getTransactionCatalogMetadata(CatalogHandle catalogHandle)
         {
-            checkOpenTransaction();
+//            checkOpenTransaction();
 
             CatalogMetadata catalogMetadata = activeCatalogs.get(catalogHandle.getRootCatalogHandle());
             if (catalogMetadata == null) {
@@ -468,7 +469,7 @@ public class InMemoryTransactionManager
 
         public synchronized void checkConnectorWrite(CatalogHandle catalogHandle)
         {
-            checkOpenTransaction();
+//            checkOpenTransaction();
             CatalogMetadata catalogMetadata = activeCatalogs.get(catalogHandle);
             checkArgument(catalogMetadata != null, "Cannot record write for catalog not part of transaction");
             if (readOnly) {

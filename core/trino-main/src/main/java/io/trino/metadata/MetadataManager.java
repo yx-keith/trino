@@ -27,6 +27,7 @@ import io.airlift.slice.Slice;
 import io.trino.FeaturesConfig;
 import io.trino.Session;
 import io.trino.connector.system.GlobalSystemConnector;
+import io.trino.event.QueryMonitor;
 import io.trino.metadata.LanguageFunctionManager.RunAsIdentityLoader;
 import io.trino.metadata.ResolvedFunction.ResolvedFunctionDecoder;
 import io.trino.spi.ErrorCode;
@@ -1593,6 +1594,12 @@ public final class MetadataManager
         ConnectorMetadata metadata = catalogMetadata.getMetadata(session);
 
         metadata.dropMaterializedView(session.toConnectorSession(catalogHandle), viewName.asSchemaTableName());
+
+        Map<QualifiedObjectName, MaterializedViewDefinition> cteMaterializedViewDefinitionMap = QueryMonitor.getCteMaterializedViewDefinitionMap();
+        Map<QualifiedObjectName, Boolean> cteMaterializedViewRefreshedMap = QueryMonitor.getCteMaterializedViewRefreshedMap();
+        cteMaterializedViewDefinitionMap.remove(viewName);
+        cteMaterializedViewRefreshedMap.remove(viewName);
+
         if (catalogMetadata.getSecurityManagement() == SYSTEM) {
             systemSecurityMetadata.tableDropped(session, viewName.asCatalogSchemaTableName());
         }
