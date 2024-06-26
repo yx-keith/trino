@@ -25,6 +25,7 @@ import io.airlift.node.NodeInfo;
 import io.airlift.stats.Distribution;
 import io.airlift.stats.Distribution.DistributionSnapshot;
 import io.airlift.units.DataSize;
+import io.trino.Session;
 import io.trino.SessionRepresentation;
 import io.trino.client.NodeVersion;
 import io.trino.cost.StatsAndCosts;
@@ -40,6 +41,9 @@ import io.trino.execution.TaskInfo;
 import io.trino.execution.TaskState;
 import io.trino.metadata.FunctionManager;
 import io.trino.metadata.Metadata;
+import io.trino.metadata.MetadataManager;
+import io.trino.metadata.MaterializedViewDefinition;
+import io.trino.metadata.QualifiedObjectName;
 import io.trino.metadata.SessionPropertyManager;
 import io.trino.operator.OperatorStats;
 import io.trino.operator.RetryPolicy;
@@ -77,17 +81,12 @@ import io.trino.transaction.TransactionId;
 import org.joda.time.DateTime;
 
 import java.time.Duration;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.OptionalLong;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static io.trino.SystemSessionProperties.isCteToMaterializedViewEnabled;
 import static io.trino.execution.QueryState.QUEUED;
 import static io.trino.execution.StageInfo.getAllStages;
 import static io.trino.sql.planner.planprinter.PlanPrinter.jsonDistributedPlan;
@@ -115,6 +114,9 @@ public class QueryMonitor
     private final Metadata metadata;
     private final FunctionManager functionManager;
     private final int maxJsonLimit;
+    private final MetadataManager metadataManager;
+    private static final Map<QualifiedObjectName, MaterializedViewDefinition> cteMaterializedViewDefinitionMap = new HashMap<>();
+    private static final Map<QualifiedObjectName, Boolean> cteMaterializedViewRefreshedMap = new HashMap<>();
 
     @Inject
     public QueryMonitor(
@@ -128,7 +130,8 @@ public class QueryMonitor
             SessionPropertyManager sessionPropertyManager,
             Metadata metadata,
             FunctionManager functionManager,
-            QueryMonitorConfig config)
+            QueryMonitorConfig config,
+            MetadataManager metadataManager)
     {
         this.eventListenerManager = requireNonNull(eventListenerManager, "eventListenerManager is null");
         this.stageInfoCodec = requireNonNull(stageInfoCodec, "stageInfoCodec is null");
@@ -142,6 +145,7 @@ public class QueryMonitor
         this.metadata = requireNonNull(metadata, "metadata is null");
         this.functionManager = requireNonNull(functionManager, "functionManager is null");
         this.maxJsonLimit = toIntExact(config.getMaxOutputStageJsonSize().toBytes());
+        this.metadataManager = requireNonNull(metadataManager, "metadataManager is null");
     }
 
     public void queryCreatedEvent(BasicQueryInfo queryInfo)
@@ -246,6 +250,14 @@ public class QueryMonitor
     public void queryCompletedEvent(QueryInfo queryInfo)
     {
         QueryStats queryStats = queryInfo.getQueryStats();
+        Session session = queryInfo.getSession().toSession();
+        //创建物化视图并刷新
+        if (isCteToMaterializedViewEnabled(session)) {
+            cteMaterializedViewDefinitionMap.forEach((name, viewDefinition) ->
+                    metadataManager.createMaterializedView(session, name, viewDefinition, new HashMap<>(), false, false));
+            cteMaterializedViewDefinitionMap.clear();
+        }
+
         eventListenerManager.queryCompleted(requiresAnonymizedPlan ->
                 new QueryCompletedEvent(
                         createQueryMetadata(queryInfo, requiresAnonymizedPlan),
@@ -264,6 +276,27 @@ public class QueryMonitor
 
         logQueryTimeline(queryInfo);
     }
+
+    public static Map<QualifiedObjectName, MaterializedViewDefinition> getCteMaterializedViewDefinitionMap()
+    {
+        return cteMaterializedViewDefinitionMap;
+    }
+
+    public static void cacheCteMaterializedViewDefinitionMap(QualifiedObjectName name, MaterializedViewDefinition definition)
+    {
+        cteMaterializedViewDefinitionMap.put(name, definition);
+    }
+
+    public static Map<QualifiedObjectName, Boolean> getCteMaterializedViewRefreshedMap()
+    {
+        return cteMaterializedViewRefreshedMap;
+    }
+
+    public static void updateCteMaterializedViewRefreshedMap(QualifiedObjectName name, Boolean isRefreshed)
+    {
+        cteMaterializedViewRefreshedMap.put(name, isRefreshed);
+    }
+
 
     private QueryMetadata createQueryMetadata(QueryInfo queryInfo, boolean requiresAnonymizedPlan)
     {

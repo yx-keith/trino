@@ -101,6 +101,9 @@ public final class SystemSessionProperties
     public static final String FIX_JOIN_ORDER= "fix_join_order";
     public static final String JOIN_REORDERING_STRATEGY = "join_reordering_strategy";
     public static final String MAX_REORDERED_JOINS = "max_reordered_joins";
+    public static final String CTE_TO_MATERIALIZED_VIEW = "cte_to_materialized_view";
+    public static final String MV_BASE_CATALOG = "mv_base_catalog";
+    public static final String MV_BASE_SCHEMA = "mv_base_schema";
     public static final String INITIAL_SPLITS_PER_NODE = "initial_splits_per_node";
     public static final String SPLIT_CONCURRENCY_ADJUSTMENT_INTERVAL = "split_concurrency_adjustment_interval";
     public static final String OPTIMIZE_METADATA_QUERIES = "optimize_metadata_queries";
@@ -482,6 +485,21 @@ public final class SystemSessionProperties
                         FIX_JOIN_ORDER,
                         "fix join order",
                         optimizerConfig.isFixJoinOrderEnabled(),
+                        false),
+                booleanProperty(
+                        CTE_TO_MATERIALIZED_VIEW,
+                        "cte to materialized view",
+                        featuresConfig.isCteToMaterializedViewEnabled(),
+                        false),
+                stringProperty(
+                        MV_BASE_CATALOG,
+                        "mv base catalog",
+                        featuresConfig.getMvBaseCatalog(),
+                        false),
+                stringProperty(
+                        MV_BASE_SCHEMA,
+                        "mv base schema",
+                        featuresConfig.getMvBaseSchema(),
                         false),
                 booleanProperty(
                         SPATIAL_JOIN,
@@ -1286,6 +1304,21 @@ public final class SystemSessionProperties
     public static boolean isFixJoinOrderEnabled(Session session)
     {
         return session.getSystemProperty(FIX_JOIN_ORDER, Boolean.class);
+    }
+
+    public static boolean isCteToMaterializedViewEnabled(Session session)
+    {
+        return session.getSystemProperty(CTE_TO_MATERIALIZED_VIEW, Boolean.class);
+    }
+
+    public static Optional<String> getMVBaseCatalog(Session session)
+    {
+        return Optional.ofNullable(session.getSystemProperty(MV_BASE_CATALOG, String.class));
+    }
+
+    public static Optional<String> getMVBaseSchema(Session session)
+    {
+        return Optional.ofNullable(session.getSystemProperty(MV_BASE_SCHEMA, String.class));
     }
 
     public static boolean isSpatialJoinEnabled(Session session)

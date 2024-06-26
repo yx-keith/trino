@@ -30,6 +30,7 @@ import io.trino.sql.SqlPath;
 import io.trino.transaction.TransactionId;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -379,5 +380,36 @@ public final class SessionRepresentation
                 preparedStatements,
                 createProtocolHeaders(protocolName),
                 exchangeEncryptionKey);
+    }
+
+    public Session toSession()
+    {
+        return new Session(
+                new QueryId(queryId),
+                querySpan,
+                transactionId,
+                clientTransactionSupport,
+                toIdentity(),
+                toOriginalIdentity(new HashMap<>()),
+                source,
+                catalog,
+                schema,
+                path,
+                traceToken,
+                timeZoneKey,
+                locale,
+                remoteUserAddress,
+                userAgent,
+                clientInfo,
+                clientTags,
+                clientCapabilities,
+                resourceEstimates,
+                start,
+                systemProperties,
+                catalogProperties,
+                new SessionPropertyManager(),
+                preparedStatements,
+                createProtocolHeaders(protocolName),
+                Optional.empty());
     }
 }

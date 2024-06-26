@@ -28,6 +28,7 @@ import io.trino.tracing.TracingConnectorMetadata;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.google.common.base.Preconditions.checkState;
+import static io.trino.SystemSessionProperties.isCteToMaterializedViewEnabled;
 import static java.util.Objects.requireNonNull;
 
 public class CatalogTransaction
@@ -64,7 +65,10 @@ public class CatalogTransaction
 
     public synchronized ConnectorMetadata getConnectorMetadata(Session session)
     {
-        checkState(!finished.get(), "Already finished");
+        if (!isCteToMaterializedViewEnabled(session)) {
+            checkState(!finished.get(), "Already finished");
+        }
+
         if (connectorMetadata == null) {
             ConnectorSession connectorSession = session.toConnectorSession(catalogHandle);
             connectorMetadata = connector.getMetadata(connectorSession, transactionHandle);

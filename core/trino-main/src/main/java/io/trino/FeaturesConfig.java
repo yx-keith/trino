@@ -112,6 +112,10 @@ public class FeaturesConfig
 
     private boolean faultTolerantExecutionExchangeEncryptionEnabled = true;
 
+    private boolean cteToMaterializedViewEnabled;
+    private String mvBaseCatalog = "hive";
+    private String mvBaseSchema;
+
     public enum DataIntegrityVerification
     {
         NONE,
@@ -516,5 +520,41 @@ public class FeaturesConfig
     public void applyFaultTolerantExecutionDefaults()
     {
         exchangeCompressionCodec = LZ4;
+    }
+
+    public boolean isCteToMaterializedViewEnabled()
+    {
+        return cteToMaterializedViewEnabled;
+    }
+
+    @Config("cte-to-materialized-view-enabled")
+    public FeaturesConfig setCteToMaterializedViewEnabled(boolean cteToMaterializedViewEnabled)
+    {
+        this.cteToMaterializedViewEnabled = cteToMaterializedViewEnabled;
+        return this;
+    }
+
+    public String getMvBaseCatalog()
+    {
+        return mvBaseCatalog;
+    }
+
+    @Config("mv-base-catalog")
+    public FeaturesConfig setMvBaseCatalog(String mvBaseCatalog)
+    {
+        this.mvBaseCatalog = mvBaseCatalog;
+        return this;
+    }
+
+    public String getMvBaseSchema()
+    {
+        return mvBaseSchema;
+    }
+
+    @Config("mv-base-schema")
+    public FeaturesConfig setMvBaseSchema(String mvBaseSchema)
+    {
+        this.mvBaseSchema = mvBaseSchema;
+        return this;
     }
 }

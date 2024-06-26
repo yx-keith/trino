@@ -53,7 +53,15 @@ import io.trino.sql.tree.ComparisonExpression;
 import io.trino.sql.tree.Expression;
 import io.trino.sql.tree.SymbolReference;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
 
@@ -64,7 +72,11 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.collect.Sets.powerSet;
-import static io.trino.SystemSessionProperties.*;
+import static io.trino.SystemSessionProperties.getJoinDistributionType;
+import static io.trino.SystemSessionProperties.getJoinReorderingStrategy;
+import static io.trino.SystemSessionProperties.getMaxReorderedJoins;
+import static io.trino.SystemSessionProperties.getJoinFixedOrder;
+import static io.trino.SystemSessionProperties.isFixJoinOrderEnabled;
 import static io.trino.sql.ir.IrUtils.and;
 import static io.trino.sql.ir.IrUtils.combineConjuncts;
 import static io.trino.sql.ir.IrUtils.extractConjuncts;
@@ -129,7 +141,6 @@ public class ReorderJoins
             Optional<String> optionalOrders = getJoinFixedOrder(context.getSession());
             if (optionalOrders.isPresent()) {
                 String orders = optionalOrders.get();
-//            String orders = "inventory,date_dim:2,warehouse;catalog_sales,item,customer_demographics,household_demographics,date_dim:1,date_dim:3";
                 fixedOrderList = getFixedOrderList(orders);
             }
         }

@@ -24,7 +24,12 @@ import io.trino.sql.planner.PlanNodeIdAllocator;
 import io.trino.sql.planner.plan.*;
 import jakarta.annotation.Nullable;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 

@@ -2795,6 +2795,13 @@ public class IcebergMetadata
             boolean replace,
             boolean ignoreExisting)
     {
+        if (!properties.containsKey("format")) {
+            properties.put("format", IcebergFileFormat.PARQUET);
+        }
+
+        if (!properties.containsKey("format_version")) {
+            properties.put("format_version", 2);
+        }
         catalog.createMaterializedView(session, viewName, definition, properties, replace, ignoreExisting);
     }
 

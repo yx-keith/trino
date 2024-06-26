@@ -24,7 +24,7 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 public class Table
         extends QueryBody
 {
-    private final QualifiedName name;
+    private QualifiedName name;
     private final Optional<QueryPeriod> queryPeriod;
 
     public Table(QualifiedName name)
@@ -52,6 +52,11 @@ public class Table
     public QualifiedName getName()
     {
         return name;
+    }
+
+    public void setName(QualifiedName name)
+    {
+        this.name = name;
     }
 
     @Override
@@ -113,5 +118,10 @@ public class Table
     public Optional<QueryPeriod> getQueryPeriod()
     {
         return queryPeriod;
+    }
+
+    public Optional<NodeLocation> getLocation()
+    {
+        return super.getLocation();
     }
 }
