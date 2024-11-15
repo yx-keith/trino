@@ -30,6 +30,26 @@ public class ServerConfig
     private Duration gracePeriod = new Duration(2, MINUTES);
     private boolean queryResultsCompressionEnabled = true;
     private Optional<String> queryInfoUrlTemplate = Optional.empty();
+    private boolean trinoHAEnabled = false;
+    private boolean trinoDiscoveryEnabled = false;
+
+    public boolean isTrinoDiscoveryEnabled() {
+        return trinoDiscoveryEnabled;
+    }
+
+    @Config("discovery-server.node")
+    public void setTrinoDiscoveryEnabled(boolean trinoDiscoveryEnabled) {
+        this.trinoDiscoveryEnabled = trinoDiscoveryEnabled;
+    }
+
+    public boolean isTrinoHAEnabled() {
+        return trinoHAEnabled;
+    }
+
+    @Config("trino-ha-enabled")
+    public void setTrinoHAEnabled(boolean trinoHAEnabled) {
+        this.trinoHAEnabled = trinoHAEnabled;
+    }
 
     public boolean isCoordinator()
     {

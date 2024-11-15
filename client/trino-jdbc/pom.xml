@@ -64,10 +64,10 @@
             <version>1.7</version>
         </dependency>
 
-        <dependency>
-            <groupId>io.opentelemetry.instrumentation</groupId>
-            <artifactId>opentelemetry-okhttp-3.0</artifactId>
-        </dependency>
+        <!--        <dependency>-->
+        <!--            <groupId>io.opentelemetry.instrumentation</groupId>-->
+        <!--            <artifactId>opentelemetry-okhttp-3.0</artifactId>-->
+        <!--        </dependency>-->
 
         <dependency>
             <groupId>io.trino</groupId>
@@ -87,6 +87,18 @@
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-context</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-okhttp-3.0</artifactId>
             <scope>provided</scope>
         </dependency>
 
@@ -422,14 +434,14 @@
                                     <pattern>okhttp3</pattern>
                                     <shadedPattern>${shadeBase}.okhttp3</shadedPattern>
                                 </relocation>
-                                <relocation>
-                                    <pattern>io.opentelemetry.extension</pattern>
-                                    <shadedPattern>${shadeBase}.opentelemetry.extension</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>io.opentelemetry.instrumentation</pattern>
-                                    <shadedPattern>${shadeBase}.opentelemetry.instrumentation</shadedPattern>
-                                </relocation>
+                                <!--                                <relocation>-->
+                                <!--                                    <pattern>io.opentelemetry.extension</pattern>-->
+                                <!--                                    <shadedPattern>${shadeBase}.opentelemetry.extension</shadedPattern>-->
+                                <!--                                </relocation>-->
+                                <!--                                <relocation>-->
+                                <!--                                    <pattern>io.opentelemetry.instrumentation</pattern>-->
+                                <!--                                    <shadedPattern>${shadeBase}.opentelemetry.instrumentation</shadedPattern>-->
+                                <!--                                </relocation>-->
                                 <relocation>
                                     <pattern>okio</pattern>
                                     <shadedPattern>${shadeBase}.okio</shadedPattern>

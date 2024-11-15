@@ -50,9 +50,6 @@ public class InsecureAuthenticator
 
         String user;
         if (basicAuthCredentials.isPresent()) {
-            if (basicAuthCredentials.get().getPassword().isPresent()) {
-                throw new AuthenticationException("Password not allowed for insecure authentication", BasicAuthCredentials.AUTHENTICATE_HEADER);
-            }
             user = basicAuthCredentials.get().getUser();
         }
         else {

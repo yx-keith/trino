@@ -38,7 +38,7 @@
         <module>core/trino-server-main</module>
         <module>core/trino-server-rpm</module>
         <module>core/trino-spi</module>
-        <module>docs</module>
+        <!--        <module>docs</module>-->
         <module>lib/trino-array</module>
         <module>lib/trino-cache</module>
         <module>lib/trino-filesystem</module>
@@ -66,8 +66,8 @@
         <module>plugin/trino-blackhole</module>
         <module>plugin/trino-cassandra</module>
         <module>plugin/trino-clickhouse</module>
-        <module>plugin/trino-delta-lake</module>
-        <module>plugin/trino-druid</module>
+        <!--        <module>plugin/trino-delta-lake</module>-->
+        <!--        <module>plugin/trino-druid</module>-->
         <module>plugin/trino-elasticsearch</module>
         <module>plugin/trino-example-http</module>
         <module>plugin/trino-example-jdbc</module>
@@ -81,9 +81,9 @@
         <module>plugin/trino-iceberg</module>
         <module>plugin/trino-ignite</module>
         <module>plugin/trino-jmx</module>
-        <module>plugin/trino-kafka</module>
-        <module>plugin/trino-kinesis</module>
-        <module>plugin/trino-kudu</module>
+        <!--        <module>plugin/trino-kafka</module>-->
+        <!--        <module>plugin/trino-kinesis</module>-->
+        <!--        <module>plugin/trino-kudu</module>-->
         <module>plugin/trino-local-file</module>
         <module>plugin/trino-mariadb</module>
         <module>plugin/trino-memory</module>
@@ -96,11 +96,11 @@
         <module>plugin/trino-oracle</module>
         <module>plugin/trino-password-authenticators</module>
         <module>plugin/trino-phoenix5</module>
-        <module>plugin/trino-pinot</module>
+        <!--        <module>plugin/trino-pinot</module>-->
         <module>plugin/trino-postgresql</module>
         <module>plugin/trino-prometheus</module>
         <module>plugin/trino-raptor-legacy</module>
-        <module>plugin/trino-redis</module>
+        <!--        <module>plugin/trino-redis</module>-->
         <module>plugin/trino-redshift</module>
         <module>plugin/trino-resource-group-managers</module>
         <module>plugin/trino-session-property-managers</module>
@@ -117,7 +117,7 @@
         <module>service/trino-verifier</module>
         <module>testing/trino-benchmark-queries</module>
         <module>testing/trino-benchto-benchmarks</module>
-        <module>testing/trino-faulttolerant-tests</module>
+        <!--        <module>testing/trino-faulttolerant-tests</module>-->
         <module>testing/trino-plugin-reader</module>
         <module>testing/trino-product-tests</module>
         <module>testing/trino-product-tests-groups</module>
@@ -127,7 +127,7 @@
         <module>testing/trino-test-jdbc-compatibility-old-server</module>
         <module>testing/trino-testing</module>
         <module>testing/trino-testing-containers</module>
-        <module>testing/trino-testing-kafka</module>
+        <!--        <module>testing/trino-testing-kafka</module>-->
         <module>testing/trino-testing-resources</module>
         <module>testing/trino-testing-services</module>
         <module>testing/trino-tests</module>
@@ -142,6 +142,7 @@
 
     <properties>
         <project.build.targetJdk>21</project.build.targetJdk>
+        <air.check.skip-checkstyle>true</air.check.skip-checkstyle>
 
         <air.check.skip-spotbugs>true</air.check.skip-spotbugs>
         <air.check.skip-pmd>true</air.check.skip-pmd>

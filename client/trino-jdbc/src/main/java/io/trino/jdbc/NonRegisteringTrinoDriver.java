@@ -13,9 +13,9 @@
  */
 package io.trino.jdbc;
 
-import io.opentelemetry.api.GlobalOpenTelemetry;
-import io.opentelemetry.api.OpenTelemetry;
-import io.opentelemetry.instrumentation.okhttp.v3_0.OkHttpTelemetry;
+//import io.opentelemetry.api.GlobalOpenTelemetry;
+//import io.opentelemetry.api.OpenTelemetry;
+//import io.opentelemetry.instrumentation.okhttp.v3_0.OkHttpTelemetry;
 import okhttp3.Call;
 import okhttp3.OkHttpClient;
 
@@ -59,19 +59,12 @@ public class NonRegisteringTrinoDriver
         OkHttpClient.Builder builder = httpClient.newBuilder();
         uri.setupClient(builder);
 
-        return new TrinoConnection(uri, instrumentClient(builder.build()));
+        return new TrinoConnection(uri, wrapClient(builder.build()));
     }
 
-    private Call.Factory instrumentClient(OkHttpClient client)
+    protected Call.Factory wrapClient(OkHttpClient client)
     {
-        try {
-            OpenTelemetry openTelemetry = GlobalOpenTelemetry.get();
-            return OkHttpTelemetry.builder(openTelemetry).build().newCallFactory(client);
-        }
-        catch (NoClassDefFoundError ignored) {
-            // assume OTEL is not available and return the original client
-            return (Call.Factory) client;
-        }
+        return client;
     }
 
     @Override

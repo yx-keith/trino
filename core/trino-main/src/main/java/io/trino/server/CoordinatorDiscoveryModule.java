@@ -23,8 +23,8 @@ public class CoordinatorDiscoveryModule
     @Override
     protected void setup(Binder binder)
     {
-        if (buildConfigObject(ServerConfig.class).isCoordinator() &&
-                buildConfigObject(EmbeddedDiscoveryConfig.class).isEnabled()) {
+        if ((buildConfigObject(ServerConfig.class).isCoordinator() && buildConfigObject(EmbeddedDiscoveryConfig.class).isEnabled())
+                || buildConfigObject(ServerConfig.class).isTrinoDiscoveryEnabled()) {
             install(new EmbeddedDiscoveryModule());
         }
     }

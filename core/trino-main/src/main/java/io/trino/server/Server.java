@@ -23,6 +23,7 @@ import com.google.inject.TypeLiteral;
 import com.google.inject.util.Types;
 import io.airlift.bootstrap.ApplicationConfigurationException;
 import io.airlift.bootstrap.Bootstrap;
+import io.airlift.configuration.ConfigurationLoader;
 import io.airlift.discovery.client.Announcer;
 import io.airlift.discovery.client.DiscoveryModule;
 import io.airlift.discovery.client.ServiceAnnouncement;
@@ -68,13 +69,12 @@ import io.trino.util.EmbedVersion;
 import org.weakref.jmx.guice.MBeanModule;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 import static io.airlift.discovery.client.ServiceAnnouncement.ServiceAnnouncementBuilder;
 import static io.airlift.discovery.client.ServiceAnnouncement.serviceAnnouncement;
@@ -87,6 +87,7 @@ import static java.util.stream.Collectors.joining;
 
 public class Server
 {
+    private static Logger log = Logger.get(Server.class);
     public final void start(String trinoVersion)
     {
         new EmbedVersion(trinoVersion).embedVersion(() -> doStart(trinoVersion)).run();
@@ -98,37 +99,98 @@ public class Server
         verifyJvmRequirements();
         verifySystemTimeIsReasonable();
 
-        Logger log = Logger.get(Server.class);
         log.info("Java version: %s", StandardSystemProperty.JAVA_VERSION.value());
 
         ImmutableList.Builder<Module> modules = ImmutableList.builder();
-        modules.add(
-                new NodeModule(),
-                new DiscoveryModule(),
-                new HttpServerModule(),
-                new JsonModule(),
-                new JaxrsModule(),
-                new MBeanModule(),
-                new PrefixObjectNameGeneratorModule("io.trino"),
-                new JmxModule(),
-                new JmxHttpModule(),
-                new JmxOpenMetricsModule(),
-                new LogJmxModule(),
-                new TraceTokenModule(),
-                new TracingModule("trino", trinoVersion),
-                new EventModule(),
-                new JsonEventModule(),
-                new ServerSecurityModule(),
-                new AccessControlModule(),
-                new EventListenerModule(),
-                new ExchangeManagerModule(),
-                new CoordinatorDiscoveryModule(),
-                new CatalogManagerModule(),
-                new TransactionManagerModule(),
-                new ServerMainModule(trinoVersion),
-                new GracefulShutdownModule(),
-                new WarningCollectorModule());
 
+        boolean trinoHaEnabled = getTrinoHa();
+        boolean trinoDiscoveryEnabled = getTrinoDiscovery();
+
+        // 如果开启了HA，则discovery.uri中的ip就不能指向本地IP
+        // 或者ip是本地的，但是端口号不能与http-server.http.port相同
+        if (trinoHaEnabled) {
+            ensureConfigRight();
+        }
+
+        if (trinoHaEnabled){
+            modules.add(
+                    new NodeModule(),
+                    new DiscoveryModule(),
+                    new HttpServerModule(),
+                    new JsonModule(),
+                    new JaxrsModule(),
+                    new MBeanModule(),
+                    new PrefixObjectNameGeneratorModule("io.trino"),
+                    new JmxModule(),
+                    new JmxHttpModule(),
+                    new JmxOpenMetricsModule(),
+                    new LogJmxModule(),
+                    new TraceTokenModule(),
+                    new TracingModule("trino", trinoVersion),
+                    new EventModule(),
+                    new JsonEventModule(),
+                    new ServerSecurityModule(),
+                    new AccessControlModule(),
+                    new EventListenerModule(),
+                    new ExchangeManagerModule(),
+                    new CatalogManagerModule(),
+                    new TransactionManagerModule(),
+                    new ServerMainModule(trinoVersion),
+                    new GracefulShutdownModule(),
+                    new WarningCollectorModule());
+            startServer(modules, startTime);
+        } else if (trinoDiscoveryEnabled) {
+            modules.add(
+                        new NodeModule(),
+                        new HttpServerModule(),
+                        new CoordinatorDiscoveryModule(),
+                        new DiscoveryModule(),
+                        new JsonModule(),
+                        new JaxrsModule(),
+                        new MBeanModule(),
+                        new JmxModule(),
+                        new EventModule()
+                        );
+            Bootstrap app = new Bootstrap(modules.build());
+            try {
+                app.initialize();
+                log.info("======== SERVER STARTED ========");
+            } catch (Throwable e) {
+                log.error(e);
+                System.exit(1);
+            }
+        } else {
+            modules.add(
+                    new NodeModule(),
+                    new DiscoveryModule(),
+                    new HttpServerModule(),
+                    new JsonModule(),
+                    new JaxrsModule(),
+                    new MBeanModule(),
+                    new PrefixObjectNameGeneratorModule("io.trino"),
+                    new JmxModule(),
+                    new JmxHttpModule(),
+                    new JmxOpenMetricsModule(),
+                    new LogJmxModule(),
+                    new TraceTokenModule(),
+                    new TracingModule("trino", trinoVersion),
+                    new EventModule(),
+                    new JsonEventModule(),
+                    new ServerSecurityModule(),
+                    new AccessControlModule(),
+                    new EventListenerModule(),
+                    new ExchangeManagerModule(),
+                    new CoordinatorDiscoveryModule(),
+                    new CatalogManagerModule(),
+                    new TransactionManagerModule(),
+                    new ServerMainModule(trinoVersion),
+                    new GracefulShutdownModule(),
+                    new WarningCollectorModule());
+            startServer(modules,startTime);
+        }
+    }
+
+    private void startServer(ImmutableList.Builder<Module> modules, long startTime) {
         modules.addAll(getAdditionalModules());
 
         Bootstrap app = new Bootstrap(modules.build());
@@ -285,5 +347,55 @@ public class Server
             return;
         }
         log.info("%s: %s", name, path);
+    }
+
+    private boolean getTrinoHa(){
+        String configFile = System.getProperty("config");
+        if (configFile != null) {
+            try {
+                Map<String, String> properties = ConfigurationLoader.loadPropertiesFrom(configFile);
+                return Boolean.parseBoolean(properties.getOrDefault("trino-ha-enabled", "false"));
+            } catch (IOException var10) {
+                throw new UncheckedIOException(var10);
+            }
+        }
+        return false;
+    }
+
+    private boolean getTrinoDiscovery(){
+        String configFile = System.getProperty("config");
+        if (configFile != null) {
+            try {
+                Map<String, String> properties = ConfigurationLoader.loadPropertiesFrom(configFile);
+                return Boolean.parseBoolean(properties.getOrDefault("discovery-server.node", "false"));
+            } catch (IOException var10) {
+                throw new UncheckedIOException(var10);
+            }
+        }
+        return false;
+    }
+
+    private void ensureConfigRight() {
+        String configFile = System.getProperty("config");
+        if (configFile != null) {
+            try {
+                Map<String, String> properties = ConfigurationLoader.loadPropertiesFrom(configFile);
+                String httpServerPort = properties.get("http-server.http.port");
+                String[] discoveryIpAndPort = properties.get("discovery.uri").substring(7).split(":");
+                String discoveryUriIpName = discoveryIpAndPort[0];
+                String discoveryUriPort = discoveryIpAndPort[1];
+
+                InetAddress localHost = InetAddress.getLocalHost();
+                String localIP = localHost.getHostAddress();
+
+                String discoveryUriIp = InetAddress.getByName(discoveryUriIpName).getHostAddress();
+                log.info("discoveryUriIp is "+discoveryUriIp);
+                if ((discoveryUriIp.equals("127.0.0.1") || localIP.equals(discoveryUriIp)) && discoveryUriPort.equals(httpServerPort)){
+                    throw new RuntimeException("You have enabled HA. So the discovery.uri of cofig.properties should be the IP and port of discoveru server!");
+                }
+            } catch (IOException var10) {
+                throw new UncheckedIOException(var10);
+            }
+        }
     }
 }

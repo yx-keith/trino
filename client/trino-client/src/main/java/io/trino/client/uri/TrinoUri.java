@@ -281,11 +281,7 @@ public class TrinoUri
 
         // enable SSL by default for the trino schema and the standard port
         useSecureConnection = SSL.getValue(properties).orElse(uri.getScheme().equals("https") || (uri.getScheme().equals("trino") && uri.getPort() == 443));
-        if (!password.orElse("").isEmpty()) {
-            if (!useSecureConnection) {
-                throw new SQLException("TLS/SSL required for authentication with username and password");
-            }
-        }
+
         validateConnectionProperties(properties);
 
         this.address = HostAndPort.fromParts(uri.getHost(), uri.getPort() == -1 ? (useSecureConnection ? 443 : 80) : uri.getPort());
@@ -607,12 +603,8 @@ public class TrinoUri
             setupSocksProxy(builder, socksProxy);
             setupHttpProxy(builder, httpProxy);
 
-            String password = this.password.orElse("");
-            if (!password.isEmpty()) {
-                if (!useSecureConnection) {
-                    throw new SQLException("TLS/SSL is required for authentication with username and password");
-                }
-                builder.addInterceptor(basicAuth(getRequiredUser(), password));
+            if (this.user.isPresent() && this.password.isPresent()) {
+                builder.addInterceptor(basicAuth(this.user.get(), this.password.get()));
             }
 
             if (useSecureConnection) {
@@ -643,9 +635,6 @@ public class TrinoUri
             }
 
             if (kerberosRemoteServiceName.isPresent()) {
-                if (!useSecureConnection) {
-                    throw new SQLException("TLS/SSL is required for Kerberos authentication");
-                }
                 setupKerberos(
                         builder,
                         checkRequired(kerberosServicePrincipalPattern, PropertyName.KERBEROS_SERVICE_PRINCIPAL_PATTERN),
@@ -661,17 +650,10 @@ public class TrinoUri
             }
 
             if (accessToken.isPresent()) {
-                if (!useSecureConnection) {
-                    throw new SQLException("TLS/SSL required for authentication using an access token");
-                }
                 builder.addInterceptor(tokenAuth(accessToken.get()));
             }
 
             if (externalAuthentication.orElse(false)) {
-                if (!useSecureConnection) {
-                    throw new SQLException("TLS/SSL required for authentication using external authorization");
-                }
-
                 // create HTTP client that shares the same settings, but without the external authenticator
                 TokenPoller poller = new HttpTokenPoller(builder.build());
 

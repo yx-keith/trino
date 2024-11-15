@@ -14,24 +14,28 @@
 package io.trino.server.security;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import io.trino.server.InternalAuthenticationManager;
+import io.trino.spi.TrinoException;
 import io.trino.spi.security.Identity;
 import jakarta.annotation.Priority;
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 
-import java.util.Arrays;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.*;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static io.trino.plugin.password.file.EncryptionUtil.doesBCryptPasswordMatch;
 import static io.trino.server.ServletSecurityUtils.sendWwwAuthenticate;
 import static io.trino.server.ServletSecurityUtils.setAuthenticatedIdentity;
+import static io.trino.spi.StandardErrorCode.CONFIGURATION_UNAVAILABLE;
 import static jakarta.ws.rs.Priorities.AUTHENTICATION;
 import static java.util.Objects.requireNonNull;
 
@@ -43,6 +47,8 @@ public class AuthenticationFilter
     private final InternalAuthenticationManager internalAuthenticationManager;
     private final boolean insecureAuthenticationOverHttpAllowed;
     private final InsecureAuthenticator insecureAuthenticator;
+    private String hashedPassword;
+    private final boolean httpserverPasswdEnabled;
 
     @Inject
     public AuthenticationFilter(
@@ -56,6 +62,11 @@ public class AuthenticationFilter
         this.internalAuthenticationManager = requireNonNull(internalAuthenticationManager, "internalAuthenticationManager is null");
         insecureAuthenticationOverHttpAllowed = securityConfig.isInsecureAuthenticationOverHttpAllowed();
         this.insecureAuthenticator = requireNonNull(insecureAuthenticator, "insecureAuthenticator is null");
+        this.httpserverPasswdEnabled = securityConfig.isHttpserverPasswdEnabled();
+        if (httpserverPasswdEnabled) {
+            List<String> lines = readPasswordFile(securityConfig.getPasswordFile());
+            this.hashedPassword = loadPasswordFile(lines);
+        }
     }
 
     @Override
@@ -84,6 +95,19 @@ public class AuthenticationFilter
         for (Authenticator authenticator : authenticators) {
             Identity authenticatedIdentity;
             try {
+                if (authenticator instanceof InsecureAuthenticator) {
+                    if (httpserverPasswdEnabled){
+                        Optional<BasicAuthCredentials> basicAuthCredentials = BasicAuthCredentials.extractBasicAuthCredentials(request);
+                        if (!basicAuthCredentials.isPresent()) {
+                            throw new AuthenticationException("Password is null. Please enter your password when starting");
+                        }
+                        String inputPassword = basicAuthCredentials.get().getPassword().get();
+
+                        if(!doesBCryptPasswordMatch(inputPassword, hashedPassword)) {
+                            throw new AuthenticationException("password is not correct");
+                        }
+                    }
+                }
                 authenticatedIdentity = authenticator.authenticate(request);
             }
             catch (AuthenticationException e) {
@@ -115,5 +139,30 @@ public class AuthenticationFilter
         String error = Joiner.on(" | ").join(messages);
 
         sendWwwAuthenticate(request, error, authenticateHeaders);
+    }
+
+    public static String loadPasswordFile(List<String> lines)
+    {
+
+        String line = lines.get(0).trim();
+
+        List<String> parts = Splitter.on(":").limit(2).splitToList(line);
+        if (parts.size() != 2) {
+            throw new TrinoException(CONFIGURATION_UNAVAILABLE, "Expected two parts for user and password");
+        }
+        String user = parts.get(0);
+        String hashedPassword = parts.get(1);
+
+        return hashedPassword;
+    }
+
+    public static List<String> readPasswordFile(File file)
+    {
+        try {
+            return Files.readAllLines(file.toPath());
+        }
+        catch (IOException e) {
+            throw new TrinoException(CONFIGURATION_UNAVAILABLE, "Failed to read password file: " + file, e);
+        }
     }
 }

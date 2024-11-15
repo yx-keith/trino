@@ -19,6 +19,7 @@ import com.google.inject.Inject;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.JwtParser;
 import io.trino.server.security.AuthenticationException;
+import io.trino.server.security.AuthenticationFilter;
 import io.trino.server.security.Authenticator;
 import io.trino.spi.security.Identity;
 import jakarta.ws.rs.container.ContainerRequestContext;
@@ -35,6 +36,7 @@ import java.security.Key;
 import java.security.SecureRandom;
 import java.time.ZonedDateTime;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -72,6 +74,10 @@ public class FormWebUiAuthenticationFilter
     private final Optional<Authenticator> authenticator;
 
     private static final MultipartUiCookie MULTIPART_COOKIE = new MultipartUiCookie(TRINO_UI_COOKIE, "/ui");
+    private String webUiLoginUser;
+    private String hashedPassword;
+    private final boolean webUiLogInPasswordEnabled;
+
 
     @Inject
     public FormWebUiAuthenticationFilter(
@@ -99,6 +105,12 @@ public class FormWebUiAuthenticationFilter
 
         this.formAuthenticator = requireNonNull(formAuthenticator, "formAuthenticator is null");
         this.authenticator = requireNonNull(authenticator, "authenticator is null");
+        this.webUiLogInPasswordEnabled = config.isWebUiLogInPasswordEnabled();
+        if (webUiLogInPasswordEnabled) {
+            this.webUiLoginUser = config.getWebLoginUser();
+            List<String> lines = AuthenticationFilter.readPasswordFile(config.getWebLoginPassswordFile());
+            this.hashedPassword = AuthenticationFilter.loadPasswordFile(lines);
+        }
     }
 
     @Override

@@ -18,6 +18,7 @@ import io.airlift.configuration.ConfigSecuritySensitive;
 import io.airlift.units.Duration;
 import jakarta.validation.constraints.NotNull;
 
+import java.io.File;
 import java.util.Optional;
 
 import static java.util.concurrent.TimeUnit.DAYS;
@@ -26,6 +27,37 @@ public class FormWebUiConfig
 {
     private Optional<String> sharedSecret = Optional.empty();
     private Duration sessionTimeout = new Duration(1, DAYS);
+    private File webLoginPassswordFile;
+    private String webLoginUser;
+    private boolean webUiLogInPasswordEnabled;
+
+    public boolean isWebUiLogInPasswordEnabled() {
+        return webUiLogInPasswordEnabled;
+    }
+
+    @Config("web-ui.login-password-enabled")
+    public void setWebUiLogInPasswordEnabled(boolean webUiLogInPasswordEnabled) {
+        this.webUiLogInPasswordEnabled = webUiLogInPasswordEnabled;
+    }
+
+    public String getWebLoginUser() {
+        return webLoginUser;
+    }
+
+    @Config("web-ui.login-user")
+    public void setWebLoginUser(String webLoginUser) {
+        this.webLoginUser = webLoginUser;
+    }
+
+    public File getWebLoginPassswordFile() {
+        return webLoginPassswordFile;
+    }
+
+    @Config("web-ui.login-password-file")
+    public FormWebUiConfig setWebLoginPassswordFile(File webLoginPassswordFile) {
+        this.webLoginPassswordFile = webLoginPassswordFile;
+        return this;
+    }
 
     @NotNull
     public Optional<String> getSharedSecret()

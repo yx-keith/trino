@@ -21,6 +21,7 @@ import io.airlift.configuration.DefunctConfig;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
+import java.io.File;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,6 +37,27 @@ public class SecurityConfig
     private List<String> authenticationTypes = ImmutableList.of("insecure");
     private Optional<String> fixedManagementUser = Optional.empty();
     private boolean fixedManagementUserForHttps;
+    private File passwordFile;
+    private boolean httpserverPasswdEnabled;
+
+    public boolean isHttpserverPasswdEnabled() {
+        return httpserverPasswdEnabled;
+    }
+    @Config("http-server.password-enabled")
+    public void setHttpserverPasswdEnabled(boolean httpserverPasswdEnabled) {
+        this.httpserverPasswdEnabled = httpserverPasswdEnabled;
+    }
+
+
+    public File getPasswordFile() {
+        return passwordFile;
+    }
+
+    @Config("http-server.password-file")
+    public SecurityConfig setPasswordFile(File passwordFile) {
+        this.passwordFile = passwordFile;
+        return this;
+    }
 
     public boolean isInsecureAuthenticationOverHttpAllowed()
     {
