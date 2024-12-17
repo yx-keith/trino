@@ -1,0 +1,135 @@
+@Library('cdn-devops') _
+
+def RELEASE_BUILD
+def VERTION_NAME
+String BUILD_RESULT = ""
+
+def getVersionName(){
+    println "branch_name:" + BRANCH_NAME 
+}
+
+pipeline {
+    agent {
+        label 'bigdata-192.168.29.31'
+    }
+	options {
+		buildDiscarder(logRotator(numToKeepStr: '10'))
+		disableConcurrentBuilds()
+		skipDefaultCheckout()
+		timeout(time: 300, unit: 'MINUTES')
+		gitLabConnection('gitlab')
+	}
+    environment {
+        IMAGE_CREDENTIALS = "credential-harbor"
+        // 执行条件（通用）
+        MASTER_BRANCH = "440-ctyun" 
+        //DEV_BRANCH = "TRINO.*" //开发临时分支
+        //RELEASE_TAG = ".*release" //发布分支或者tag
+        //DEV_TAG = ".*dev"
+        DEV_BRANCH = ".*dev" //开发临时分支
+        RELEASE_TAG = ".*releaseunified" //发布分支或者tag，2.44.0-1.0.0-releaseunified
+
+        
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                        // checkout code
+                        sh """chown -R root:root $WORKSPACE"""
+                        retry(2) { scmVars = checkout scm }
+                        RELEASE_BUILD = scmVars.GIT_COMMIT
+                        BUILD_RESULT = devops.updateBuildTasks(BUILD_RESULT,"Checkout OK...  √")
+                        echo 'begin checkout...'
+                        echo sh(returnStdout: true, script: "env")
+                        gitCommitId = scmVars.GIT_COMMIT
+                        gitCommitMsg = sh(script: "git log --pretty=format:%s ${gitCommitId} -1", returnStdout: true).trim()
+                        git_commit_name = sh (script: "git --no-pager show -s --format='%an' ${gitCommitId}",returnStdout: true).trim()
+                        println "git_commit_name=" + git_commit_name 
+                        println getVersionName()
+                        getassemblyversion=sh(script:"echo ${BRANCH_NAME}|cut -d '-' -f 1,2",returnStdout: true).trim()
+                        getassemblyversion="trino-"+getassemblyversion
+                        println "getassemblyversion=" + getassemblyversion
+
+                        getfirstversion=sh(script:"echo ${BRANCH_NAME}|cut -d '-' -f 1",returnStdout: true).trim()
+                        println "getfirstversion=" + getfirstversion
+                }
+            }
+        }
+
+        stage('Build-Package') {
+                    when {
+                        expression { 
+                                BRANCH_NAME ==~ env.MASTER_BRANCH || BRANCH_NAME ==~ env.DEV_BRANCH || BRANCH_NAME ==~ env.RELEASE_TAG || BRANCH_NAME ==~ env.DEV_TAG
+                                    }
+                    }
+                    steps {
+                        script {
+                                sh """ls -lh"""
+                                sh """echo $WORKSPACE"""
+                                if(BRANCH_NAME ==~ env.MASTER_BRANCH || BRANCH_NAME ==~ env.DEV_BRANCH){
+                                    sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host -v $WORKSPACE:/home/trino -v /data1/maven:/data1/maven harbor.ctyuncdn.cn/bdyun/basic-image/centos7.9-x86-jdk17:v2.0.0 /bin/bash -c \"cd /home/trino &&  mvn clean package -DskipTests -Dcheckstyle.skip=true\""""
+
+                                }else{
+                                    //sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host -v $WORKSPACE:/home/trino -v /data1/maven:/data1/maven harbor.ctyuncdn.cn/bdyun/basic-image/centos7.9-x86-jdk17:v2.0.0 /bin/bash -c \"cd /home/trino &&  mvn clean package -DskipTests -Dcheckstyle.skip=true\""""
+                                    //sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host -v $WORKSPACE:/home/trino -v /data1/docker-centos-jdk21/apache-maven-3.8.8:/data1/maven -v /data1/docker-centos-jdk21/jdk-21.0.5:/usr/local/jdk21 harbor.ctyuncdn.cn/bdyun/basic-image/centos7.9-x86-jdk17:v2.0.0 /bin/bash -c \"cd /home/trino && mvn clean package -DskipTests -Dcheckstyle.skip=true\""""
+                                    sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host -v $WORKSPACE:/home/trino -v /data1/maven:/data1/maven harbor.ctyuncdn.cn/bdyun/basic-image/centos7.9-x86-jdk21:v1.0.0 /bin/bash -c \"cd /home/trino &&  mvn clean package -DskipTests -Dcheckstyle.skip=true\""""
+                                }
+                                BUILD_RESULT = devops.updateBuildTasks(BUILD_RESULT,"Build-Package OK...√")
+                        }
+                    }
+                }
+
+	 stage('ARCHIVE'){
+            when {
+                expression {BRANCH_NAME ==~ env.RELEASE_TAG || BRANCH_NAME ==~ env.DEV_BRANCH}
+            }
+            steps {
+                script {
+                    sh """
+                    ls -lh
+                    rm -rf *${getassemblyversion}*
+                    tar -xzf core/trino-server/target/trino-server-${getfirstversion}.tar.gz
+
+                    cp client/trino-cli/target/trino-cli-${getfirstversion}-executable.jar trino-server-${getfirstversion}/
+                    cp client/trino-jdbc/target/trino-jdbc-${getfirstversion}.jar trino-server-${getfirstversion}/
+
+                    mv trino-server-${getfirstversion} ${getassemblyversion}
+                    ls -l ${getassemblyversion}/
+                    """
+                    withCredentials([usernamePassword(credentialsId:'credential-nexus',usernameVariable:'USERNAME',passwordVariable:'PASSWORD')]){
+                    if(BRANCH_NAME ==~ env.DEV_BRANCH){
+                        sh """
+                        # 放jeekefs-hadoop.jar依赖到tar包，此包区分架构，在生成jeekefs的rpm后得到整合后的jar
+                        curl -v -u ${USERNAME}:${PASSWORD} -O https://devops.ctcdn.cn/nexus/repository/raw-repo/bigdata-emr-ccdp-dependencies/jeekefs/dev/unified/jeekefs-hadoop.jar
+                        mv jeekefs-hadoop.jar ${getassemblyversion}/plugin/hive/
+
+                        tar -czf ${getassemblyversion}-dev.tar.gz ${getassemblyversion}
+                        curl -v -u ${USERNAME}:${PASSWORD} --upload-file ${getassemblyversion}-dev.tar.gz https://devops.ctcdn.cn/nexus/repository/raw-repo/bigdata-emr-dev/emr-ccdp-dev-generic/emr-ccdp-tar-dev/
+                        curl -v -u ${USERNAME}:${PASSWORD} --upload-file client/trino-jdbc/target/trino-jdbc-${getfirstversion}.jar https://devops.ctcdn.cn/nexus/repository/raw-repo/bigdata-emr-dev/emr-ccdp-dev-generic/emr-ccdp-tar-dev/
+                        curl -v -u ${USERNAME}:${PASSWORD} --upload-file client/trino-cli/target/trino-cli-${getfirstversion}-executable.jar https://devops.ctcdn.cn/nexus/repository/raw-repo/bigdata-emr-dev/emr-ccdp-dev-generic/emr-ccdp-tar-dev/
+                    """
+                    }else{
+                        sh """
+                        # 放jeekefs-hadoop.jar依赖到tar包，此包区分架构，在生成jeekefs的rpm后得到整合后的jar
+                        curl -v -u ${USERNAME}:${PASSWORD} -O https://devops.ctcdn.cn/nexus/repository/raw-repo/bigdata-emr-ccdp-dependencies/jeekefs/release/unified/jeekefs-hadoop.jar
+                        mv jeekefs-hadoop.jar ${getassemblyversion}/plugin/hive/
+
+                        tar -czf ${getassemblyversion}.tar.gz ${getassemblyversion}
+                        curl -v -u ${USERNAME}:${PASSWORD} --upload-file ${getassemblyversion}.tar.gz https://devops.ctcdn.cn/nexus/repository/raw-repo/bigdata-emr-release/emr-ccdp-release-generic/emr-ccdp-tar-release/
+                        curl -v -u ${USERNAME}:${PASSWORD} --upload-file client/trino-jdbc/target/trino-jdbc-${getfirstversion}.jar https://devops.ctcdn.cn/nexus/repository/raw-repo/bigdata-emr-release/emr-ccdp-release-generic/emr-ccdp-tar-release/
+                        curl -v -u ${USERNAME}:${PASSWORD} --upload-file client/trino-cli/target/trino-cli-${getfirstversion}-executable.jar https://devops.ctcdn.cn/nexus/repository/raw-repo/bigdata-emr-release/emr-ccdp-release-generic/emr-ccdp-tar-release/
+                    """
+                    }
+                }
+                }
+            }
+        }
+
+    }
+
+}
+
+
+
