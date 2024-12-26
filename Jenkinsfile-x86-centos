@@ -69,12 +69,10 @@ pipeline {
                                 sh """ls -lh"""
                                 sh """echo $WORKSPACE"""
                                 if(BRANCH_NAME ==~ env.MASTER_BRANCH || BRANCH_NAME ==~ env.DEV_BRANCH){
-                                    sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host -v $WORKSPACE:/home/trino -v /data1/maven:/data1/maven harbor.ctyuncdn.cn/bdyun/basic-image/centos7.9-x86-jdk17:v2.0.0 /bin/bash -c \"cd /home/trino &&  mvn clean package -DskipTests -Dcheckstyle.skip=true\""""
-
+                                    sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host -v $WORKSPACE:/home/trino -v /data1/maven:/data1/maven harbor.ctyuncdn.cn/bdyun/basic-image/centos7.9-x86-jdk21:v1.1.0 /bin/bash -c \"cd /home/trino  &&  mvn clean package -DskipTests -Dcheckstyle.skip=true\""""
                                 }else{
-                                    //sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host -v $WORKSPACE:/home/trino -v /data1/maven:/data1/maven harbor.ctyuncdn.cn/bdyun/basic-image/centos7.9-x86-jdk17:v2.0.0 /bin/bash -c \"cd /home/trino &&  mvn clean package -DskipTests -Dcheckstyle.skip=true\""""
-                                    //sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host -v $WORKSPACE:/home/trino -v /data1/docker-centos-jdk21/apache-maven-3.8.8:/data1/maven -v /data1/docker-centos-jdk21/jdk-21.0.5:/usr/local/jdk21 harbor.ctyuncdn.cn/bdyun/basic-image/centos7.9-x86-jdk17:v2.0.0 /bin/bash -c \"cd /home/trino && mvn clean package -DskipTests -Dcheckstyle.skip=true\""""
-                                    sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host -v $WORKSPACE:/home/trino -v /data1/maven:/data1/maven harbor.ctyuncdn.cn/bdyun/basic-image/centos7.9-x86-jdk21:v1.0.0 /bin/bash -c \"cd /home/trino &&  mvn clean package -DskipTests -Dcheckstyle.skip=true\""""
+                                    sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host -v $WORKSPACE:/home/trino -v /data1/maven:/data1/maven harbor.ctyuncdn.cn/bdyun/basic-image/centos7.9-x86-jdk21:v1.1.0 /bin/bash -c \"cd /home/trino  &&  mvn clean package -DskipTests -Dcheckstyle.skip=true\""""
+                                    //sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host -v $WORKSPACE:/home/trino -v /data1/maven:/data1/maven harbor.ctyuncdn.cn/bdyun/basic-image/centos7.9-x86-jdk21:v1.0.0 /bin/bash -c \"cd /home/trino && cp -rf /data1/maven/settings.xml /usr/local/maven3.8/conf/ &&  mvn clean package -DskipTests -Dcheckstyle.skip=true\""""
                                 }
                                 BUILD_RESULT = devops.updateBuildTasks(BUILD_RESULT,"Build-Package OK...√")
                         }
