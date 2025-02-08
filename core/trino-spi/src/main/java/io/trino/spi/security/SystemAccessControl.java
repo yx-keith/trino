@@ -13,6 +13,7 @@
  */
 package io.trino.spi.security;
 
+import io.trino.spi.QueryId;
 import io.trino.spi.connector.CatalogSchemaName;
 import io.trino.spi.connector.CatalogSchemaRoutineName;
 import io.trino.spi.connector.CatalogSchemaTableName;
@@ -87,6 +88,7 @@ import static io.trino.spi.security.AccessDeniedException.denySetUser;
 import static io.trino.spi.security.AccessDeniedException.denySetViewAuthorization;
 import static io.trino.spi.security.AccessDeniedException.denyShowColumns;
 import static io.trino.spi.security.AccessDeniedException.denyShowCreateSchema;
+import static io.trino.spi.security.AccessDeniedException.denyShowCreateFunction;
 import static io.trino.spi.security.AccessDeniedException.denyShowCreateTable;
 import static io.trino.spi.security.AccessDeniedException.denyShowCurrentRoles;
 import static io.trino.spi.security.AccessDeniedException.denyShowFunctions;
@@ -124,14 +126,20 @@ public interface SystemAccessControl
         denySetUser(principal, userName);
     }
 
+    @Deprecated
+    default void checkCanExecuteQuery(Identity identity)
+    {
+        denyExecuteQuery();
+    }
+
     /**
      * Checks if identity can execute a query.
      *
      * @throws AccessDeniedException if not allowed
      */
-    default void checkCanExecuteQuery(Identity identity)
+    default void checkCanExecuteQuery(Identity identity, QueryId queryId)
     {
-        denyExecuteQuery();
+        checkCanExecuteQuery(identity);
     }
 
     /**
@@ -193,6 +201,7 @@ public interface SystemAccessControl
      *
      * @throws AccessDeniedException if not allowed
      */
+    @Deprecated
     default void checkCanSetSystemSessionProperty(Identity identity, String propertyName)
     {
         denySetSystemSessionProperty(propertyName);
@@ -926,4 +935,24 @@ public interface SystemAccessControl
     }
 
     default void shutdown() {}
+
+    /**
+     * Check if identity is allowed to set the specified system property.
+     *
+     * @throws AccessDeniedException if not allowed
+     */
+    default void checkCanSetSystemSessionProperty(Identity identity, QueryId queryId, String propertyName)
+    {
+        checkCanSetSystemSessionProperty(identity, propertyName);
+    }
+
+    /**
+     * Check if identity is allowed to execute SHOW CREATE FUNCTION.
+     *
+     * @throws AccessDeniedException if not allowed
+     */
+    default void checkCanShowCreateFunction(SystemSecurityContext systemSecurityContext, CatalogSchemaRoutineName functionName)
+    {
+        denyShowCreateFunction(functionName.toString());
+    }
 }

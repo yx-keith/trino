@@ -26,6 +26,12 @@
     </artifactSet>
 
     <!-- Plugins -->
+    <artifactSet to="plugin/apache-ranger">
+        <artifact id="${project.groupId}:trino-ranger:zip:${project.version}">
+            <unpack />
+        </artifact>
+    </artifactSet>
+
     <artifactSet to="plugin/accumulo">
         <artifact id="${project.groupId}:trino-accumulo:zip:${project.version}">
             <unpack />

@@ -847,6 +847,7 @@ jobs:
             - suite-delta-lake-databricks122
             - suite-delta-lake-databricks133
             - suite-databricks-unity-http-hms
+            - suite-ranger
             - suite-gcs
             - suite-clients
             - suite-functions
