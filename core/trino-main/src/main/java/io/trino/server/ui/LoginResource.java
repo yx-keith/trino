@@ -32,7 +32,6 @@ import java.net.URI;
 import java.util.Optional;
 
 import static com.google.common.base.Strings.emptyToNull;
-import static com.google.common.base.Verify.verify;
 import static io.trino.server.security.ResourceSecurity.AccessType.WEB_UI;
 import static io.trino.server.ui.FormWebUiAuthenticationFilter.DISABLED_LOCATION_URI;
 import static io.trino.server.ui.FormWebUiAuthenticationFilter.LOGIN_FORM;
@@ -58,7 +57,6 @@ public class LoginResource
     {
         this.formWebUiAuthenticationManager = requireNonNull(formWebUiAuthenticationManager, "formWebUiAuthenticationManager is null");
         this.loginHtml = Resources.toString(Resources.getResource(getClass(), "/webapp/login.html"), UTF_8);
-        verify(loginHtml.contains(REPLACEMENT_TEXT), "login.html does not contain the replacement text");
     }
 
     @ResourceSecurity(WEB_UI)

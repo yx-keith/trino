@@ -21,12 +21,6 @@ $(document).ready(function () {
     }
     $("#redirectPath").val(redirectPath);
 
-    if (hidePassword) {
-        $("#password")
-                .prop('required', false)
-                .prop('placeholder', 'Password not allowed')
-                .prop('readonly', true);
-    }
     $("#login").show();
     $("#username").focus().val("");
 });

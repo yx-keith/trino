@@ -45,6 +45,7 @@ import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Strings.emptyToNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static io.jsonwebtoken.security.Keys.hmacShaKeyFor;
+import static io.trino.plugin.password.file.EncryptionUtil.doesBCryptPasswordMatch;
 import static io.trino.server.ServletSecurityUtils.sendWwwAuthenticate;
 import static io.trino.server.ServletSecurityUtils.setAuthenticatedIdentity;
 import static io.trino.server.security.jwt.JwtUtil.newJwtBuilder;
@@ -130,7 +131,7 @@ public class FormWebUiAuthenticationFilter
         }
 
         // login and logout resource is not visible to protocol authenticators
-        if ((path.equals(UI_LOGIN) && request.getMethod().equals("POST")) || path.equals(UI_LOGOUT)) {
+        if ((path.equals(UI_LOGIN) && request.getMethod().equals("POST"))) {
             return;
         }
 
@@ -242,6 +243,14 @@ public class FormWebUiAuthenticationFilter
 
     public Optional<NewCookie[]> checkLoginCredentials(String username, String password, boolean secure)
     {
+        if (this.webUiLogInPasswordEnabled) {
+            // 集成ranger，ranger那边可能设置了用户，所以这里不判断用户是否正确
+//            if (!username.equals(webUiLoginUser) || !doesBCryptPasswordMatch(password, hashedPassword)) {
+            if (!doesBCryptPasswordMatch(password, hashedPassword)) {
+                return Optional.empty();
+            }
+        }
+
         return formAuthenticator.isValidCredential(username, password, secure)
                 .map(user -> createAuthenticationCookie(user, secure));
     }

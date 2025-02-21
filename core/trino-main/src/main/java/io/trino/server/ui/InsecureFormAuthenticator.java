@@ -51,11 +51,7 @@ public class InsecureFormAuthenticator
     @Override
     public Optional<String> isValidCredential(String username, String password, boolean secure)
     {
-        if (username == null) {
-            return Optional.empty();
-        }
-
-        if (isLoginEnabled(secure) && password == null) {
+        if (isLoginEnabled(secure)) {
             try {
                 return Optional.of(userMapping.mapUser(username));
             }
